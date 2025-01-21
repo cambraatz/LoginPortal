@@ -1,0 +1,3 @@
+﻿<Project>
+  <Import Project="..\build\LoginPortal.Server.props" />
+</Project>

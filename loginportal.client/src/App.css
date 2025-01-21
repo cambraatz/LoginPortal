@@ -1,0 +1,606 @@
+﻿:root {
+    --primary-color: #5A89BB;
+    --action-color: #e0eaf3;
+    font-family: 'Verdana', Verdana, Geneva, Tahoma, sans-serif;
+    /*line-height: 1;*/
+    color-scheme: light;
+    color: #353535;
+    background-color: white;
+    text-align: center;
+}
+
+body {
+    display: block;
+    margin: 0;
+    background-color: white;
+}
+
+.weak {
+    font-weight: lighter;
+    margin: 0;
+}
+
+th, td {
+    padding-left: 1rem;
+    padding-right: 1rem;
+}
+
+h1 {
+    font-size: 1.5em;
+}
+
+h2 {
+    margin: 1em 0;
+    font-size: 1.1em;
+}
+
+h3 {
+    margin: 0.75em 0;
+    font-size: 0.9em;
+}
+
+h4 {
+    margin: 0.75em 0;
+    font-size: 0.75em;
+}
+
+h5 {
+    font-size: 0.75em;
+    display: block;
+    margin-block-start: 1.33em;
+    margin-block-end: 1.33em;
+    margin-inline-start: 0px;
+    margin-inline-end: 0px;
+    font-weight: bold;
+}
+
+hr {
+    margin: 0;
+}
+
+header h1, header h2, header h3, header h4, header h5 {
+    /*margin: 2.5% 4%;*/
+    margin: 1% 4%;
+    display: flex;
+    align-items: start;
+}
+
+label {
+    font-size: 0.75em;
+    margin-bottom: 5px;
+}
+/*
+button {
+    background-color:#e0eaf3;
+    color: #353535;
+}*/
+
+#Header {
+    margin: 0 0 2%;
+    position: sticky;
+    top: 0;
+    background-color: white;
+}
+
+#buffer {
+    height: 60px;
+    background-color: white;
+}
+
+#title_div {
+    display: flex;
+    flex-direction: row;
+    margin: 0 0 2% 4%;
+}
+
+    #title_div h4 {
+        margin: 0 8px 0 0;
+    }
+
+.TCS_title {
+    display: flex;
+    align-items: start;
+    text-align: left;
+    font-size: 0.75em;
+}
+
+.sticky_header {
+    width: 100%;
+}
+
+    .sticky_header div {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+        .sticky_header div h1 {
+            margin: 0 0 2% 4%;
+        }
+
+        .sticky_header div h2 {
+            margin: 0 0 2% 4%;
+        }
+
+#title_dash {
+    display: none;
+}
+
+#collapseToggle {
+    width: 15%;
+    height: 10px;
+    padding-bottom: 2px;
+    font-size: x-small;
+    background-color: #e0eaf3;
+    border: 1px solid gray;
+    border-bottom: 0;
+    border-radius: 5px 5px 0 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    position: relative;
+    left: 42.5%;
+    bottom: 0;
+    z-index: 10;
+    transition: all 2s ease-in-out;
+}
+
+    #collapseToggle img {
+        width: 25%;
+        padding-top: 2px;
+    }
+
+#AccountTab {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    padding: 1% 4%;
+    justify-content: space-between;
+    border-top: 1px solid #353535;
+    border-bottom: 1px solid #353535;
+    box-shadow: 0px 3px 4px #00000020;
+    /*background-color: #e0eaf3;*/
+}
+
+#sticky_MDPU {
+    display: flex;
+    /*justify-content: start;*/
+    width: 60%;
+    /*gap: 1%;*/
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 5%;
+}
+
+    #sticky_MDPU .weak {
+        margin-right: 3%;
+    }
+
+    #sticky_MDPU h4 {
+        margin: 0 0% 0 0;
+    }
+
+    #sticky_MDPU div {
+        /*flex-direction: row;*/
+        flex-direction: column;
+        justify-content: flex-start;
+        gap: 1%;
+    }
+
+#sticky_creds {
+    display: flex;
+    justify-content: end;
+    flex-direction: row;
+    width: 50%;
+    align-items: center;
+}
+
+#UserWidget {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    height: 20px;
+    flex-direction: row;
+    margin-right: 0.5em;
+}
+
+    #UserWidget p {
+        margin-bottom: 1.2em;
+        font-size: 0.85em;
+    }
+
+#UserIcon {
+    /*height: 30px;
+    width: 30px;
+    margin-right: 10px;*/
+    height: 20px;
+    width: 20px;
+    margin-right: 5px;
+}
+
+#Logout button {
+    height: 2em;
+    width: auto;
+}
+
+/* default */
+#widgetHeader {
+    display: block;
+    text-align: center;
+    /*margin: 16px 1em 0 1em;
+    margin: 5% 30% 0 30%;*/
+    margin: 10% 20% 0;
+    border-top: solid 1px black;
+    border-left: solid 1px black;
+    border-right: solid 1px black;
+    border-radius: 5px 5px 0 0;
+    background-color: #5A89BB;
+    color: white;
+}
+
+    #widgetHeader h4 {
+        margin: 0;
+    }
+
+.prompt {
+    display: block;
+    padding: 8px 0;
+}
+
+#Delivery_Login_Div {
+    margin: 0 20% 5%;
+    border: solid 1px black;
+    border-radius: 0 0 5px 5px;
+    background-color: #e0eaf3;
+}
+
+    #Delivery_Login_Div button {
+        margin: 1em 5%;
+        width: 30%;
+        height: 2em;
+    }
+
+#loginForm {
+    margin: 16px 0 0 0;
+}
+
+    #loginForm div {
+        display: flex;
+        flex-direction: column;
+        padding: 0 25% 1em;
+    }
+
+    #loginForm label {
+        display: flex;
+        align-items: flex-start;
+    }
+
+.input_wrapper {
+    position: relative;
+}
+
+.fail_flag {
+    width: auto !important;
+    display: none !important;
+    overflow: visible;
+    position: absolute;
+    top: 110%;
+    left: auto;
+    background-color: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+    border-radius: 4px;
+    padding: 10px 4px;
+    white-space: nowrap;
+    z-index: 10;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+    .fail_flag::before {
+        content: "";
+        position: absolute;
+        top: -18px;
+        left: 20%;
+        transform: translateX(-50%);
+        border-width: 10px;
+        border-style: solid;
+        border-color: transparent transparent #f8d7da transparent;
+        z-index: 11;
+    }
+
+    .fail_flag.visible {
+        display: flex !important;
+    }
+
+    .fail_flag p {
+        margin: 0;
+        font-size: small;
+    }
+
+#ff_login_un, #ff_login_pw {
+    padding: 10px 4px !important;
+    top: 90%;
+    left: auto;
+}
+
+#new_user {
+    color: #5A89BB;
+    text-decoration: underline;
+}
+
+    #new_user:hover {
+        color: #2866a8;
+    }
+
+.overlay {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: rgba(0, 0, 0, 0.7);
+    transition: opacity 500ms;
+    visibility: hidden;
+    opacity: 0;
+}
+
+    .overlay:target {
+        visibility: visible;
+        opacity: 1;
+    }
+
+#popupLoginWindow {
+    visibility: hidden;
+    opacity: 0;
+    pointer-events: none;
+    transition: all 0.75s ease-in-out;
+}
+
+.popupLogin {
+    margin: 25% auto;
+    padding: 5px 20px;
+    background: #fff;
+    border-radius: 5px;
+    width: 25%;
+    position: relative;
+    transition: all 1s ease-in-out;
+}
+
+    .popupLogin .close, .popupLogin .close_add, .popupLogin .edit_add {
+        position: absolute;
+        top: 20px;
+        right: 30px;
+        transition: all 200ms;
+        font-size: 30px;
+        font-weight: bold;
+        text-decoration: none;
+        color: #333;
+    }
+
+    .popupLogin .content {
+        max-height: 30%;
+        overflow: auto;
+    }
+
+    .popupLogin h1 {
+        display: flex;
+        flex-direction: row-reverse;
+        margin: 0;
+        margin-block-start: 0;
+        margin-block-end: 0.25em;
+        margin-inline-start: 0;
+        margin-inline-end: 15px;
+    }
+
+    .popupLogin p {
+        margin: 0;
+        margin-block-start: 0;
+        margin-block-end: 0.75em;
+        margin-inline-start: 0;
+        margin-inline-end: 0;
+    }
+
+    .popupLogin label {
+        font-size: smaller;
+    }
+
+#popupLoginPrompt {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 0.5em;
+}
+
+.popupLoginContent {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+    .popupLoginContent div {
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        margin-bottom: 1em;
+    }
+
+    .popupLoginContent input, .popupLoginContent label {
+        width: 80%;
+        text-align: start;
+    }
+
+#popupLoginInner {
+    text-align: center;
+    margin-top: 0.5em;
+}
+
+    #popupLoginInner button {
+        height: 2em;
+        width: 60%;
+    }
+
+#footer {
+    display: flex;
+    flex-direction: row-reverse;
+    width: 100%;
+    position: fixed;
+    bottom: 0;
+    background-color: white;
+    z-index: -1;
+}
+
+#footer_text {
+    font-size: 0.65em;
+    margin-block: 4%;
+    margin-inline: 4%;
+}
+
+#login_div {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 0 0 1em 0;
+}
+
+#login_div button {
+    max-width: 300px;
+    margin: 1em 5%;
+    min-height: 3em;
+    width: 70%;
+}
+
+@media only screen and (max-width: 400px) {
+    #sticky_MDPU {
+        text-wrap: wrap;
+    }
+
+        #sticky_MDPU h4 {
+            font-size: 0.675em;
+        }
+
+    #sticky_creds {
+        width: auto;
+    }
+
+    #UserWidget p {
+        font-size: 0.75em;
+    }
+
+    #Logout button {
+        height: auto;
+    }
+}
+
+@media only screen and (min-width: 630px) {
+    #Header {
+        margin: 0 0 1%;
+    }
+
+    #buffer {
+        height: 20px;
+    }
+
+    #title_div {
+        justify-content: start;
+        margin: 0 0 1% 4%;
+    }
+
+    .sticky_header div {
+        flex-direction: row;
+        align-items: center;
+    }
+
+        .sticky_header div h1 {
+            margin: 0 0 1% 4%;
+        }
+
+        .sticky_header div h2 {
+            margin: 0 0 1% 1%;
+        }
+
+    #collapseToggle {
+        width: 8%;
+        left: 46%;
+    }
+
+        #collapseToggle img {
+            width: 25%;
+        }
+
+    #sticky_MDPU {
+        flex-direction: row;
+        align-items: center;
+        justify-content: flex-start;
+        gap: 5%;
+    }
+
+        #sticky_MDPU div {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        #sticky_MDPU h4 {
+            font-size: 0.85em;
+        }
+
+    #sticky_creds {
+        width: 30%;
+        gap: 5%;
+    }
+
+    #UserWidget {
+        height: 30px;
+        margin-right: 0.5em;
+        margin-right: 1em;
+    }
+
+        #UserWidget p {
+            font-size: 1em;
+        }
+
+    #UserIcon {
+        height: 25px;
+        width: 25px;
+        margin-right: 5px;
+    }
+
+    #widgetHeader {
+        margin: 2% 20% 0;
+    }
+
+    #loginForm div {
+        padding: 0 30% 1em 30%;
+    }
+
+    .fail_flag p {
+        font-size: smaller;
+    }
+}
+
+@media only screen and (min-width: 1200px) {
+    label {
+        font-size: 0.8em;
+    }
+
+    #collapseToggle {
+        width: 6%;
+        left: 47%;
+    }
+
+        #collapseToggle img {
+            width: 25%;
+        }
+
+    #widgetHeader {
+        margin: 5% 20% 0 20%;
+    }
+}
+
+/*
+@media (prefers-color-scheme: dark) {
+    button.dark-mode {
+        background-color: darkgray;
+        color: white;
+    }
+}*/

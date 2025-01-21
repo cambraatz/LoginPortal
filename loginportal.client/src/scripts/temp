@@ -1,0 +1,14 @@
+rm -Rf appsettings.Development.json appsettings.json
+rm -Rf Microsoft.AspNetCore.JsonPatch.dll Microsoft.AspNetCore.Mvc.NewtonsoftJson.dll Microsoft.OpenApi.dll
+rm -Rf Newtonsoft.Json.Bson.dll Newtonsoft.Json.dll
+rm -Rf Swashbuckle.AspNetCore.Swagger.dll Swashbuckle.AspNetCore.SwaggerGen.dll Swashbuckle.AspNetCore.SwaggerUI.dll
+rm -Rf spa.proxy.json
+rm -Rf System.Data.SqlClient.dll
+rm -Rf DeliveryManager.Server DeliveryManager.Server.deps.json DeliveryManager.Server.dll DeliveryManager.Server.pdb DeliveryManager.Server.runtimeconfig.json DeliveryManager.Server.staticwebassets.runtime.json
+rm -Rf appsettings.Development.json appsettings.json
+rm -Rf Microsoft.AspNetCore.JsonPatch.dll Microsoft.AspNetCore.Mvc.NewtonsoftJson.dll Microsoft.OpenApi.dll
+rm -Rf Newtonsoft.Json.Bson.dll Newtonsoft.Json.dll
+rm -Rf Swashbuckle.AspNetCore.Swagger.dll Swashbuckle.AspNetCore.SwaggerGen.dll Swashbuckle.AspNetCore.SwaggerUI.dll
+rm -Rf spa.proxy.json
+rm -Rf System.Data.SqlClient.dll
+rm -Rf wwwroot

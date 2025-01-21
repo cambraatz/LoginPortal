@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 612 612">
+  <defs>
+    <style>
+      .cls-1 {
+        fill: #c0d6be;
+        stroke-width: 40px;
+      }
+
+      .cls-1, .cls-2 {
+        stroke: #63a35d;
+        stroke-miterlimit: 10;
+      }
+
+      .cls-2 {
+        fill: #fff;
+        stroke-width: 20px;
+      }
+    </style>
+  </defs>
+  <!-- Generator: Adobe Illustrator 28.7.2, SVG Export Plug-In . SVG Version: 1.2.0 Build 154)  -->
+  <g>
+    <g id="Layer_1">
+      <circle class="cls-1" cx="306.8" cy="306" r="284.8"/>
+      <polygon class="cls-2" points="110.3 347.8 172.4 271.4 252.8 373.4 433.2 148 501.7 204.2 256.9 500.6 110.3 347.8"/>
+    </g>
+  </g>
+</svg>
