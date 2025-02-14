@@ -1,3 +1,17 @@
 .vs/
+.vscode/
+
 loginportal.client/.vscode/
 loginportal.client/node_modules/
+
+bin/
+obj/
+
+ScaffoldingReadMe.txt
+
+*.user
+*.userosscache
+*.suo
+*.sln.docstates
+
+*.tmp

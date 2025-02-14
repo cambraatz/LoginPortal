@@ -138,7 +138,7 @@ const LoginPortal = () => {
     async function renderCompany() {
         // getCompany() also caches company...
         //const company = await getCompany_DB();
-        const company = "Brauns Express Inc";
+        const company = "Transportation Computer Support, LLC.";
         // set company state to value or placeholder... 
         if(company) {
             console.log(`renderCompany retrieved ${company} from database...`);
@@ -317,12 +317,15 @@ const LoginPortal = () => {
             }
         })
         const data = await response.json();
-        //console.log(data);
+        console.log(data);
 
         if (data.success) {
+            localStorage.setItem('username',user_field);
+            localStorage.setItem('powerunit',data.powerunit)
+
             cacheToken(data.accessToken,data.refreshToken);
             await getCompanies();
-
+            
             setMessage(null);
             openPopup();
         } else {
@@ -450,13 +453,6 @@ const LoginPortal = () => {
     }
 
     // new edits below...
-    /*
-    cp1: {
-            COMPANYKEY: "COMPANY01",
-            COMPANYNAME: "Brauns Express Inc",
-            COMPANYDB: "TCSWEB"
-        }
-    */
     const [companies, setCompanies] = useState([]);
 
     async function getCompanies() {
@@ -477,33 +473,87 @@ const LoginPortal = () => {
         })
     
         const data = await response.json();
+        console.log(data);
 
         setCompanies(data.companies);
-        console.log(companies)
-        return companies
+        console.log(data.companies)
+        return data.companies
     }
 
     async function pressButton(e) {
-        // handle new user menu button clicks...
+        localStorage.removeItem('DB');
+        localStorage.removeItem('company');
+
+        let company = null;
         switch(e.target.id){
             case "cp1":
-                console.log(`Clicked ${companies.cp1}`);
+                console.log(`Clicked ${companies[0].COMPANYNAME}`);
+                company = companies[0];
                 break;
             case "cp2":
-                console.log(`Clicked ${companies.cp2}`);
+                console.log(`Clicked ${companies[1].COMPANYNAME}`);
+                company = companies[1];
                 break;
             case "cp3":
-                console.log(`Clicked ${companies.cp3}`);
+                console.log(`Clicked ${companies[2].COMPANYNAME}`);
+                company = companies[2];
                 break;
             case "cp4":
-                console.log(`Clicked ${companies.cp4}`);
+                console.log(`Clicked ${companies[3].COMPANYNAME}`);
+                company = companies[3];
                 break;
             case "cp5":
-                console.log(`Clicked ${companies.cp5}`);
+                console.log(`Clicked ${companies[4].COMPANYNAME}`);
+                company = companies[4];
                 break;
             default:
                 break;
         }
+
+        console.log(`Company clicked: ${company.COMPANYNAME}`);
+
+        // request token from memory, refresh as needed...
+        const token = await requestAccess(credentials.USERNAME);
+        
+        // handle invalid token on login...
+        if (!token) {
+            navigate('/');
+            return;
+        }
+
+        const response = await fetch(API_URL + "api/Registration/SelectCompany", {
+            method: "POST",
+            body: JSON.stringify({
+                Company: company.COMPANYKEY,
+                AccessToken: token
+            }),
+            headers: {
+                "Authorization": `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            }
+        })
+
+        if (response.ok) {
+            const data = await response.json();
+            console.log(data);
+
+            localStorage.setItem('accessToken', data.AccessToken);
+            localStorage.setItem('refreshToken', data.RefreshToken);
+
+            window.location.href = `http://www.deliverymanager.tcsservices.com:40730?access_token=${data.AccessToken}/`;
+        } else {
+            console.error("Failed to refresh token");
+            return null;
+        }
+
+        //localStorage.setItem('DB',company.COMPANYKEY);
+        //localStorage.setItem('company',company.COMPANYNAME);
+
+        //document.cookie = `company=${company.COMPANYNAME}; path=/; max-age=${60*60*24}`
+        //document.cookie = `DB=${company.COMPANYKEY}; path=/; max-age=${60*60*24}`
+
+        
+        //closePopup();
     }
 
     // render template...
@@ -552,10 +602,10 @@ const LoginPortal = () => {
                     <p>Select Company</p>
                 </div>
                 <div id="login_div">
-                    {companies.map((company) => {
+                    {companies.map((company,i) => {
                         if (company){
                             return (
-                                <button id={company.COMPANYKEY} key={company.COMPANYKEY} type="button" onClick={pressButton}>{company.COMPANYNAME}</button>
+                                <button id={"cp"+(i+1)} key={company.COMPANYKEY} type="button" onClick={pressButton}>{company.COMPANYNAME}</button>
                             );
                         }
                         return null;

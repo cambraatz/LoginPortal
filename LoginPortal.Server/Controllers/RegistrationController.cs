@@ -22,6 +22,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using System.Threading.Tasks;
 using System.Security.Cryptography.X509Certificates;
+using Newtonsoft.Json.Linq;
 
 // add utility to generate JWTs...
 public class TokenService
@@ -31,15 +32,21 @@ public class TokenService
     {
         _configuration = configuration;
     }
-    public (string AccessToken, string RefreshToken) GenerateToken(string username)
+    public (string AccessToken, string RefreshToken) GenerateToken(string username, string company=null)
     {
-        var accessClaims = new[]
+        var accessClaims = new List<Claim>
         {
             new Claim(ClaimTypes.Name, username),
             new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
         };
 
-        var refreshClaims = new[]
+        // add company if present...
+        if (!string.IsNullOrEmpty(company))
+        {
+            accessClaims.Add(new Claim("Company", company));
+        }
+
+        var refreshClaims = new List<Claim>
         {
             new Claim(ClaimTypes.Name, username),
             new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
@@ -70,6 +77,13 @@ public class RefreshRequest
 {
     public string Username { get; set; }
     public string RefreshToken { get; set; }
+}
+
+public class CompanyRequest
+{
+    public string Company { get; set; }
+    public string AccessToken { get; set; }
+
 }
 
 /*/////////////////////////////////////////////////////////////////////////////
@@ -125,7 +139,35 @@ namespace DeliveryManager.Server.Controllers
                 var tokens = tokenService.GenerateToken(request.Username);
                 return Ok(new { AccessToken = tokens.AccessToken, RefreshToken = tokens.RefreshToken });
             }
-            return Unauthorized();
+            return Unauthorized("Invalid Token.");
+        }
+
+        [HttpPost]
+        [Route("SelectCompany")]
+        [Authorize]
+        public IActionResult SelectCompany([FromBody] CompanyRequest request)
+        {
+            // extract username from access token...
+            var tokenHandler = new JwtSecurityTokenHandler();
+            var principal = tokenHandler.ValidateToken(request.AccessToken, new TokenValidationParameters
+            {
+                ValidateIssuerSigningKey = true,
+                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["Jwt:Key"])),
+                ValidateIssuer = true,
+                ValidIssuer = _configuration["Jwt:Issuer"],
+                ValidateAudience = true,
+                ValidAudience = _configuration["Jwt:Audience"],
+                ValidateLifetime = false
+            }, out SecurityToken validatedToken);
+
+            if (validatedToken is JwtSecurityToken jwtToken &&
+                jwtToken.Header.Alg.Equals(SecurityAlgorithms.HmacSha256, StringComparison.InvariantCultureIgnoreCase))
+            {
+                var tokenService = new TokenService(_configuration);
+                var tokens = tokenService.GenerateToken(principal.Identity.Name, request.Company);
+                return Ok(new { AccessToken = tokens.AccessToken, RefreshToken = tokens.RefreshToken });
+            }
+            return Unauthorized("Invalid Token.");
         }
 
         /*/////////////////////////////////////////////////////////////////////////////
@@ -185,8 +227,10 @@ namespace DeliveryManager.Server.Controllers
 
         [HttpGet]
         [Route("GetCompanies")]
-        public async Task<JsonResult> GetCompany()
+        [Authorize]
+        public async Task<JsonResult> GetCompanies()
         {
+            //string query = "SELECT COMPANYKEY01, COMPANYKEY02, COMPANYKEY03, COMPANYKEY04, COMPANYKEY05 FROM dbo.USERS WHERE USERNAME = @USERNAME";
             string query = "SELECT * FROM dbo.COMPANY";
 
             string sqlDatasource = connString;
@@ -207,7 +251,6 @@ namespace DeliveryManager.Server.Controllers
                                 {
                                     COMPANYKEY = myReader["COMPANYKEY"].ToString(),
                                     COMPANYNAME = myReader["COMPANYNAME"].ToString(),
-                                    COMPANYDB = myReader["COMPANYDB"].ToString()
                                 };
                                 companies.Add(company);
                             }

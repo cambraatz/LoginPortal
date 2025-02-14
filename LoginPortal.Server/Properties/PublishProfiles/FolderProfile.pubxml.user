@@ -1,0 +1,17 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<!--
+https://go.microsoft.com/fwlink/?LinkID=208121.
+-->
+<Project>
+  <PropertyGroup>
+    <TimeStampOfAssociatedLegacyPublishXmlFile />
+    <_PublishTargetUrl>C:\Users\camer\Desktop\Apps\LoginPortal\LoginPortal.Server\bin\Release\net7.0\publish\</_PublishTargetUrl>
+    <History>True|2025-02-13T23:32:58.7527796Z||;True|2025-02-13T15:44:05.4169081-07:00||;True|2025-02-11T15:23:05.0871146-07:00||;True|2025-02-11T15:14:45.5558867-07:00||;</History>
+    <LastFailureDetails />
+  </PropertyGroup>
+  <ItemGroup>
+    <DestinationConnectionStrings Include="DriverChecklistDBCon">
+      <Value>Server=192.168.1.33,1433%3bAttachDbFilename=/var/opt/mssql/data/TCSWEB.mdf%3bUser Id=SA%3bPassword=Sql2023!%3bDatabase=TCSWEB%3bTrustServerCertificate=True</Value>
+    </DestinationConnectionStrings>
+  </ItemGroup>
+</Project>

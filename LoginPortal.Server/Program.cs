@@ -18,9 +18,9 @@ builder.Services.AddCors(options => {
             policy.WithOrigins("http://www.tcsservices.com:40730",
                                 "www.tcsservices.com:40730",
                                 "tcsservices.com/40730",
-                                "http://www.deliverymanager.tcsservices.com:40730",
-                                "www.deliverymanager.tcsservices.com:40730",
-                                "deliverymanager.tcsservices.com:40730",
+                                "http://www.login.tcsservices.com:40730",
+                                "www.login.tcsservices.com:40730",
+                                "login.tcsservices.com:40730",
                                 "https://localhost:5173")
                                 .AllowAnyHeader()
                                 .AllowAnyMethod();

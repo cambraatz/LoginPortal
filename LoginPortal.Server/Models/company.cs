@@ -4,6 +4,5 @@
     {
         public string? COMPANYKEY { get; set; }
         public string? COMPANYNAME { get; set; }
-        public string? COMPANYDB { get; set; }
     }
 }

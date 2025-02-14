@@ -198,6 +198,15 @@ export const scrapeFile = (file) => {
 };
 
 //export const API_URL = "http://www.tcsservices.com:40730/"
-//export const API_URL = "http://www.deliverymanager.tcsservices.com:40730/"
+//export const API_URL = "http://www.login.tcsservices.com:40730/"
+export const API_URL = "https://localhost:7097/";
+
+
+
+
+
+//export const API_URL = "http://localhost:5173/";
+
 //export const API_URL = "http://localhost:5113/";
-export const API_URL = "http://localhost:5171/"
+
+//export const API_URL = "http://localhost:5171/"
