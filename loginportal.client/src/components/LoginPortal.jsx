@@ -19,7 +19,8 @@ import { scrapeDate,
     requestAccess,
     isCompanyValid,
     getCompany_DB, 
-    showFailFlag} from '../scripts/helperFunctions';
+    showFailFlag,
+    COMPANIES} from '../scripts/helperFunctions';
 
 /*/////////////////////////////////////////////////////////////////////
 
@@ -263,6 +264,15 @@ const LoginPortal = () => {
     }
     *//////////////////////////////////////////////////////////////////
 
+    const [user, setUser] = useState({
+        Username: null,
+        Permissions: null,
+        Powerunit: null,
+        ActiveCompany: null,
+        Companies: null,
+        Modules: null
+    });
+
     async function handleSubmit(e) {
         // prevent default and reset popup window...
         e.preventDefault();
@@ -320,15 +330,27 @@ const LoginPortal = () => {
         console.log(data);
 
         if (data.success) {
-            localStorage.setItem('username',user_field);
-            localStorage.setItem('powerunit',data.powerunit)
+            localStorage.setItem('user',data.user);
 
             cacheToken(data.accessToken,data.refreshToken);
-            await getCompanies();
+            //await getCompanies();
+            console.log("user companies:");
+            console.log(data.user.Companies);
+            console.log(data.user.Modules);
+            console.log(data.user);
             
-            setMessage(null);
+            setUser(data.user);
+            setCompanies(data.user.Companies);
+            setModules(data.user.Modules);
+            
+            setPopupMessage("Select Company");
+            setPopup("company");
             openPopup();
         } else {
+            setCompanies([]);
+            setModules([]);
+            setPopup(null);
+
             // trigger red borders for errors...
             document.getElementById("USERNAME").classList.add("invalid_input");
             document.getElementById("PASSWORD").classList.add("invalid_input");
@@ -454,6 +476,7 @@ const LoginPortal = () => {
 
     // new edits below...
     const [companies, setCompanies] = useState([]);
+    const [modules, setModules] = useState([]);
 
     async function getCompanies() {
         // request token from memory, refresh as needed...
@@ -487,32 +510,37 @@ const LoginPortal = () => {
         let company = null;
         switch(e.target.id){
             case "cp1":
-                console.log(`Clicked ${companies[0].COMPANYNAME}`);
+                console.log(`Clicked ${companies[0]}`);
                 company = companies[0];
                 break;
             case "cp2":
-                console.log(`Clicked ${companies[1].COMPANYNAME}`);
+                console.log(`Clicked ${companies[1]}`);
                 company = companies[1];
                 break;
             case "cp3":
-                console.log(`Clicked ${companies[2].COMPANYNAME}`);
+                console.log(`Clicked ${companies[2]}`);
                 company = companies[2];
                 break;
             case "cp4":
-                console.log(`Clicked ${companies[3].COMPANYNAME}`);
+                console.log(`Clicked ${companies[3]}`);
                 company = companies[3];
                 break;
             case "cp5":
-                console.log(`Clicked ${companies[4].COMPANYNAME}`);
+                console.log(`Clicked ${companies[4]}`);
                 company = companies[4];
                 break;
             default:
                 break;
         }
 
-        console.log(`Company clicked: ${company.COMPANYNAME}`);
+        setUser({...user, ActiveCompany: COMPANIES[company]});
+        console.log(`Company clicked: ${COMPANIES[company]}`);
 
-        // request token from memory, refresh as needed...
+        setPopupMessage("Select Module");
+        setPopup("module");
+        console.log(modules);
+
+        /*// request token from memory, refresh as needed...
         const token = await requestAccess(credentials.USERNAME);
         
         // handle invalid token on login...
@@ -544,16 +572,49 @@ const LoginPortal = () => {
         } else {
             console.error("Failed to refresh token");
             return null;
-        }
+        }*/
 
-        //localStorage.setItem('DB',company.COMPANYKEY);
-        //localStorage.setItem('company',company.COMPANYNAME);
-
-        //document.cookie = `company=${company.COMPANYNAME}; path=/; max-age=${60*60*24}`
-        //document.cookie = `DB=${company.COMPANYKEY}; path=/; max-age=${60*60*24}`
-
-        
         //closePopup();
+    }
+
+    const [popup, setPopup] = useState("company");
+    const [popupMessage, setPopupMessage] = useState(null);
+
+    const renderPopup = (type) => {
+        if (type == "company") {
+            //setPopupMessage("Select Company");
+            if (companies.length > 0) {
+                return companies.map((company,i) => {
+                    return (
+                        <button id={"cp"+(i+1)} key={company+1} type="button" onClick={pressButton}>
+                            {COMPANIES[company]}
+                        </button>
+                    );
+                });
+            } else {
+                //setPopupMessage("No Available Companies, Contact Admin.");
+                return(
+                    <div className="error_placeholder">No Companies Available</div>
+                );
+            }
+            
+        } else if (type == "module") {
+            //setPopupMessage("Select Module");
+            if (modules.length > 0) {
+                return modules.map((module,i) => {
+                    return (
+                        <button id={"md"+(i+1)} key={module+1} type="button" onClick={pressButton}>
+                            {module}
+                        </button>
+                    );
+                });
+            } else {
+                //setPopupMessage("No Available Modules, Contact Admin.");
+                return(
+                    <div className="error_placeholder">No Modules Available</div>
+                );
+            }
+        }
     }
 
     // render template...
@@ -593,26 +654,33 @@ const LoginPortal = () => {
                     <button type="submit">Login</button>
                 </form>
             </div>
+
+            {/* Popup Logic Below... */}
             <div id="popupLoginWindow" className="overlay">
                 <div className="popupLogin">
                     <div id="popupLoginExit" className="content">
                         <h1 id="close" className="popupLoginWindow" onClick={closePopup}>&times;</h1>
                     </div>
                     <div id="popupLoginPrompt" className="content">
-                    <p>Select Company</p>
-                </div>
-                <div id="login_div">
-                    {companies.map((company,i) => {
-                        if (company){
-                            return (
-                                <button id={"cp"+(i+1)} key={company.COMPANYKEY} type="button" onClick={pressButton}>{company.COMPANYNAME}</button>
-                            );
-                        }
-                        return null;
-                    })}
-                </div>
+                        <p>{popupMessage}</p>
+                    </div>
+
+                    <div id="login_div">
+                        {renderPopup(popup)}
+                        {/*companies.map((company,i) => {
+                            if (company){
+                                return (
+                                    <button id={"cp"+(i+1)} key={COMPANIES[company]} type="button" onClick={pressButton}>
+                                        {COMPANIES[company]}
+                                    </button>
+                                );
+                            }
+                            return null;
+                        })*/}
+                    </div>
                 </div>
             </div>
+
             <Footer id="footer" />
         </div>
     )

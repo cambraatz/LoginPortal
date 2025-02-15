@@ -7,6 +7,7 @@ Update: 1/9/2025
 *//////////////////////////////////////////////////////////////////////////////
 
 using DeliveryManager.Server.Models;
+using LoginPortal.Server.Models;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -83,7 +84,6 @@ public class CompanyRequest
 {
     public string Company { get; set; }
     public string AccessToken { get; set; }
-
 }
 
 /*/////////////////////////////////////////////////////////////////////////////
@@ -186,20 +186,28 @@ namespace DeliveryManager.Server.Controllers
 
         [HttpPost]
         [Route("Login")]
-        public async Task<JsonResult> Login([FromBody] loginCredentials user)
+        public async Task<JsonResult> Login([FromBody] loginCredentials credentials)
         {
-            string query = "select * from dbo.USERS where USERNAME COLLATE SQL_Latin1_General_CP1_CS_AS = @USERNAME and PASSWORD COLLATE SQL_Latin1_General_CP1_CS_AS = @PASSWORD";
+            //string query = "select * from dbo.USERS where USERNAME COLLATE SQL_Latin1_General_CP1_CS_AS = @USERNAME and PASSWORD COLLATE SQL_Latin1_General_CP1_CS_AS = @PASSWORD";
+            string query = @" select USERNAME, PERMISSIONS, POWERUNIT,
+                            COMPANYKEY01, COMPANYKEY02, COMPANYKEY03, COMPANYKEY04, COMPANYKEY05,
+                            MODULE01, MODULE02, MODULE03, MODULE04, MODULE05, MODULE06, MODULE07, MODULE08, MODULE09, MODULE10
+                            from dbo.USERS where USERNAME COLLATE SQL_Latin1_General_CP1_CS_AS = @USERNAME
+                            and PASSWORD COLLATE SQL_Latin1_General_CP1_CS_AS = @PASSWORD";
 
             DataTable table = new DataTable();
             string sqlDatasource = connString;
             SqlDataReader myReader;
+
+            User user = null;
+
             await using (SqlConnection myCon = new SqlConnection(sqlDatasource))
             {
                 myCon.Open();
                 using (SqlCommand myCommand = new SqlCommand(query, myCon))
                 {
-                    myCommand.Parameters.AddWithValue("@USERNAME", user.USERNAME);
-                    myCommand.Parameters.AddWithValue("@PASSWORD", user.PASSWORD);
+                    myCommand.Parameters.AddWithValue("@USERNAME", credentials.USERNAME);
+                    myCommand.Parameters.AddWithValue("@PASSWORD", credentials.PASSWORD);
 
                     myReader = myCommand.ExecuteReader();
                     table.Load(myReader);
@@ -209,15 +217,52 @@ namespace DeliveryManager.Server.Controllers
             }
             if (table.Rows.Count > 0)
             {
-                // derive task/powerunit values...
-                string task = user.USERNAME == "admin" ? "admin" : "driver";
-                string powerunit = (task == "driver") ? table.Rows[0]["POWERUNIT"].ToString() : null;
+                var row = table.Rows[0];
+
+                // initialize user values...
+                user = new User
+                {
+                    Username = row["USERNAME"].ToString(),
+                    Permissions = row["PERMISSIONS"] != DBNull.Value ? Convert.ToBoolean(row["PERMISSIONS"]) : false,
+                    Powerunit = row["POWERUNIT"] != DBNull.Value ? row["POWERUNIT"].ToString() : null,
+                    ActiveCompany = row["COMPANYKEY01"] != DBNull.Value ? row["COMPANYKEY01"].ToString() : null,
+                    Companies = new List<string>(),
+                    Modules = new List<string>(),
+                };
+
+                // populate COMPANY + MODULE arrays...
+                string companyKey;
+                string moduleKey;
+                for (int i = 1; i <= 10; i++)
+                {
+                    if (i <= 5)
+                    {
+                        companyKey = "COMPANYKEY" + i.ToString("D2");
+                        if (row[companyKey] != DBNull.Value)
+                        {
+                            user.Companies.Add(row[companyKey].ToString());
+                        }
+                    }
+
+                    moduleKey = "MODULE" + i.ToString("D2");
+                    if (row[moduleKey] != DBNull.Value)
+                    {
+                        user.Modules.Add(row[moduleKey].ToString());
+                    }
+                        
+                };
 
                 // generate token...
                 var tokenService = new TokenService(_configuration);
-                (string accessToken, string refreshToken) = tokenService.GenerateToken(user.USERNAME);
+                (string accessToken, string refreshToken) = tokenService.GenerateToken(credentials.USERNAME);
 
-                return new JsonResult(new { success = true, task = task, powerunit = powerunit, accessToken = accessToken, refreshToken = refreshToken });
+                return new JsonResult(new 
+                { 
+                    success = true,
+                    user = user,
+                    accessToken = accessToken,
+                    refreshToken = refreshToken 
+                });
             }
             else
             {

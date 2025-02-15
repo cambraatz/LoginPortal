@@ -197,6 +197,12 @@ export const scrapeFile = (file) => {
     return relLink;
 };
 
+export const COMPANIES = {
+    BRAUNS: "Brauns Express Inc.",
+    NTS: "Normandin Trucking Services, LLC.",
+    TCS: "Transportation Computer Support, LLC."
+};
+
 //export const API_URL = "http://www.tcsservices.com:40730/"
 //export const API_URL = "http://www.login.tcsservices.com:40730/"
 export const API_URL = "https://localhost:7097/";
