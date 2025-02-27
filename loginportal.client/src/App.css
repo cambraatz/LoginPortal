@@ -15,6 +15,18 @@ body {
     background-color: white;
 }
 
+input {
+    height: 2em;
+    width: 100%;
+    /*background-color: white;*/
+    border: 1px solid #353535;
+    border-radius: 5px;
+}
+
+input:disabled {
+    border: 1px solid #0000006b;
+}
+
 .weak {
     font-weight: lighter;
     margin: 0;
@@ -350,24 +362,24 @@ button {
         opacity: 1;
     }
 
-#popupLoginWindow {
+#popupWindow {
     visibility: hidden;
     opacity: 0;
     pointer-events: none;
     transition: all 0.75s ease-in-out;
 }
 
-.popupLogin {
+.popup {
     margin: 25% auto;
     padding: 5px 20px;
     background: #fff;
     border-radius: 5px;
-    width: 25%;
+    width: 50%;
     position: relative;
     transition: all 1s ease-in-out;
 }
 
-    .popupLogin .close, .popupLogin .close_add, .popupLogin .edit_add {
+    .popup .close, .popup .close_add, .popup .edit_add {
         position: absolute;
         top: 20px;
         right: 30px;
@@ -378,12 +390,12 @@ button {
         color: #333;
     }
 
-    .popupLogin .content {
+    .popup .content {
         max-height: 30%;
         overflow: auto;
     }
 
-    .popupLogin h1 {
+    .popup h1 {
         display: flex;
         flex-direction: row-reverse;
         margin: 0;
@@ -393,7 +405,7 @@ button {
         margin-inline-end: 15px;
     }
 
-    .popupLogin p {
+    .popup p {
         margin: 0;
         margin-block-start: 0;
         margin-block-end: 0.75em;
@@ -401,23 +413,23 @@ button {
         margin-inline-end: 0;
     }
 
-    .popupLogin label {
+    .popup label {
         font-size: smaller;
     }
 
-#popupLoginPrompt {
+#popupPrompt {
     display: flex;
     justify-content: center;
     margin-bottom: 0.5em;
 }
 
-.popupLoginContent {
+.popupContent {
     display: flex;
     flex-direction: column;
     align-items: center;
 }
 
-    .popupLoginContent div {
+    .popupContent div {
         width: 100%;
         display: flex;
         flex-direction: column;
@@ -425,20 +437,27 @@ button {
         margin-bottom: 1em;
     }
 
-    .popupLoginContent input, .popupLoginContent label {
+    .popupContent input, .popupContent label {
         width: 80%;
         text-align: start;
     }
 
-#popupLoginInner {
+#popupInner {
     text-align: center;
     margin-top: 0.5em;
 }
 
-    #popupLoginInner button {
+    #popupInner button {
         height: 2em;
         width: 60%;
     }
+
+.popup_button {
+    min-height: 2em !important;
+    height: 2em !important;
+    width: 60% !important;
+    margin: 0 5% !important;
+}
 
 #footer {
     display: flex;
@@ -490,6 +509,10 @@ button {
     #Logout button {
         height: auto;
     }
+
+    .popup {
+        width: 75%;
+    }
 }
 
 @media only screen and (min-width: 630px) {
@@ -505,19 +528,6 @@ button {
         justify-content: start;
         margin: 0 0 1% 4%;
     }
-
-    .sticky_header div {
-        flex-direction: row;
-        align-items: center;
-    }
-
-        .sticky_header div h1 {
-            margin: 0 0 1% 4%;
-        }
-
-        .sticky_header div h2 {
-            margin: 0 0 1% 1%;
-        }
 
     #collapseToggle {
         width: 8%;
@@ -594,6 +604,23 @@ button {
 
     #widgetHeader {
         margin: 5% 20% 0 20%;
+    }
+
+    .popup {
+        width: 25%;
+    }
+
+    .sticky_header div {
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .sticky_header div h1 {
+        margin: 0 0 1% 4%;
+    }
+
+    .sticky_header div h2 {
+        margin: 0 0 1% 1%;
     }
 }
 

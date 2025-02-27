@@ -5,11 +5,17 @@ using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
+using System.Reflection.PortableExecutable;
 
 // new modification to CORS package...
 var MyAllowSpecificOrigins = "_myAllowSpecificOrigins";
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.WebHost.ConfigureKestrel(options =>
+{
+    options.ListenAnyIP(6000);
+});
 
 // new modification to CORS package...
 builder.Services.AddCors(options => {
@@ -21,9 +27,17 @@ builder.Services.AddCors(options => {
                                 "http://www.login.tcsservices.com:40730",
                                 "www.login.tcsservices.com:40730",
                                 "login.tcsservices.com:40730",
-                                "https://localhost:5173")
+                                "https://localhost:5173",
+                                "http://www.login.tcsservices.com",
+                                "http://www.deliverymanager.tcsservices.com:40730",
+                                "www.deliverymanager.tcsservices.com:40730",
+                                "deliverymanager.tcsservices.com:40730",
+                                "https://www.login.tcsservices.com",
+                                "www.login.tcsservices.com",
+                                "login.tcsservices.com")
                                 .AllowAnyHeader()
-                                .AllowAnyMethod();
+                                .AllowAnyMethod()
+                                .AllowCredentials();
         });
 });
 

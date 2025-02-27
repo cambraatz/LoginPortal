@@ -1,32 +1,32 @@
-/* eslint-disable react/prop-types */
 import { useState, useEffect } from 'react';
+import PropTypes from 'prop-types';
 import userIcon from "../images/userIcon.png";
 import { useNavigate } from "react-router-dom";
-import { translateDate, logout } from '../Scripts/helperFunctions';
+import { translateDate, logout } from '../scripts/helperFunctions';
 import toggleDots from '../images/Toggle_Dots.svg';
 
-const UserWidget = (props) => {
-    const [user, setUser] = useState(props.driver);
+const UserWidget = ({ driver, status, company, toggle, header, MFSTDATE, POWERUNIT }) => {
+    const [user, setUser] = useState(driver);
     //const [status, setStatus] = useState(props.status);
 
     useEffect(() => {        
-        if (props.status === "Off"){
+        if (status === "Off"){
             document.getElementById("Logout").style.display = "none";
         }
         else {
             document.getElementById("Logout").style.display = "flex";
         }
 
-        if (props.toggle === "close") {
+        if (toggle === "close") {
             document.getElementById("main_title").style.display = "none";
             document.getElementById("title_div").style.display = "none";
             document.getElementById("buffer").style.height = "10px";
-            setStatus("close");
+            setHeaderStatus("close");
         } else {
             document.getElementById("main_title").style.display = "flex";
             document.getElementById("title_div").style.display = "flex";
             document.getElementById("buffer").style.height = "20px";
-            setStatus("open");
+            setHeaderStatus("open");
         }
     });
 
@@ -38,41 +38,25 @@ const UserWidget = (props) => {
             console.log("Successful log out operation!");
         }
         setUser("Signed Out");
-        navigate('/', {state: props.company});
+        navigate('/', {state: company});
     }
-
-    /*
-    const handleClick = () => {
-        document.getElementById("popupLogoutWindow").style.visibility = "visible";
-        document.getElementById("popupLogoutWindow").style.opacity = 1;
-        document.getElementById("popupLogoutWindow").style.pointerEvents = "auto";
-    };
-
-    const handleClose = () => {
-        document.getElementById("popupLogoutWindow").style.visibility = "hidden";
-        document.getElementById("popupLogoutWindow").style.opacity = 0;
-        document.getElementById("popupLogoutWindow").style.pointerEvents = "none";
-    };
-    */
-
-    //console.log("header: ", props.header)
     
-    const [status,setStatus] = useState(props.toggle);
+    const [headerStatus,setHeaderStatus] = useState(toggle);
 
     const collapseHeader = (e) => {
         //console.log(e.target.id);
         if (e.target.id === "collapseToggle" || e.target.id === "toggle_dots") {
-            if (status === "open") {
+            if (headerStatus === "open") {
                 document.getElementById("main_title").style.display = "none";
                 document.getElementById("title_div").style.display = "none";
                 document.getElementById("buffer").style.height = "10px";
-                setStatus("close");
+                setHeaderStatus("close");
                 //e.target.id = "openToggle";
             } else {
                 document.getElementById("main_title").style.display = "flex";
                 document.getElementById("title_div").style.display = "flex";
                 document.getElementById("buffer").style.height = "20px";
-                setStatus("open");
+                setHeaderStatus("open");
                 //e.target.id = "collapseToggle";
             }
         }
@@ -83,19 +67,19 @@ const UserWidget = (props) => {
             <div id="collapseToggle" onClick={collapseHeader}><img id="toggle_dots" src={toggleDots} alt="toggle dots" /></div>
             <div id="AccountTab" onClick={collapseHeader}>
                 <div id="sticky_MDPU">
-                {(props.header === "Full" || props.header === "Manifest") && (
+                {(header === "Full" || header === "Manifest") && (
                     <>
                         <div>
                             <h4>Manifest Date:</h4>
-                            <h4 className="weak">{props.MFSTDATE ? translateDate(props.MFSTDATE) : "00/00/0000"}</h4>
+                            <h4 className="weak">{MFSTDATE ? translateDate(MFSTDATE) : "00/00/0000"}</h4>
                         </div>
                         <div>
                             <h4>Power Unit:</h4>
-                            <h4 className="weak">{props.POWERUNIT}</h4>
+                            <h4 className="weak">{POWERUNIT}</h4>
                         </div>
                     </>
                 )}
-                {(props.header === "Admin") && (
+                {(header === "Admin") && (
                     <>
                         
                     </>
@@ -112,25 +96,18 @@ const UserWidget = (props) => {
                     </div>
                 </div>
             </div>
-            {/*
-            <div id="popupLogoutWindow" className="overlay">
-                <div className="popupLogout">
-                    <div id="popupExit" className="content">
-                        <h1 id="close" onClick={handleClose}>&times;</h1>
-                    </div>
-                    <div id="popupLogoutPrompt" className="content">
-                        <p>Are you sure you want to log out? </p>
-                    </div>
-                    <div className="content">
-                        <div id="popupLogoutInner">
-                            <button onClick={handleLogout}>Yes</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            */}
         </>
     );
 };
 
 export default UserWidget;
+
+UserWidget.propTypes = {
+    driver: PropTypes.string.isRequired, 
+    status: PropTypes.string.isRequired,
+    toggle: PropTypes.string.isRequired,
+    company: PropTypes.string.isRequired,
+    header: PropTypes.string,
+    MFSTDATE: PropTypes.string,
+    POWERUNIT: PropTypes.string
+};

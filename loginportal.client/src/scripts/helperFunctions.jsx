@@ -1,15 +1,15 @@
 export const getToken = () => {
-    return sessionStorage.getItem('accessToken');
+    return localStorage.getItem('accessToken');
 }
 
 export const cacheToken = (access,refresh) => {
-    sessionStorage.setItem('accessToken', access);
-    sessionStorage.setItem('refreshToken', refresh);
+    localStorage.setItem('accessToken', access);
+    localStorage.setItem('refreshToken', refresh);
 }
 
 export const logout = () => {
-    sessionStorage.removeItem('accessToken');
-    sessionStorage.removeItem('refreshToken');
+    localStorage.removeItem('accessToken');
+    localStorage.removeItem('refreshToken');
     localStorage.removeItem('company');
 }
 
@@ -67,8 +67,8 @@ export async function refreshToken(username) {
     if (response.ok) {
         const data = await response.json();
 
-        sessionStorage.setItem('accessToken', data.AccessToken);
-        sessionStorage.setItem('refreshToken', data.RefreshToken);
+        localStorage.setItem('accessToken', data.AccessToken);
+        localStorage.setItem('refreshToken', data.RefreshToken);
 
         return {access: data.AccessToken, refresh: data.RefreshToken};
     } else {
@@ -203,9 +203,16 @@ export const COMPANIES = {
     TCS: "Transportation Computer Support, LLC."
 };
 
+export const MODULES = {
+    ADMIN: "Administrative Portal",
+    DLVYCHKOFF: "Delivery Manager",
+    WAREHOUSE: "Warehouse Scanner"
+};
+
 //export const API_URL = "http://www.tcsservices.com:40730/"
 //export const API_URL = "http://www.login.tcsservices.com:40730/"
-export const API_URL = "https://localhost:7097/";
+export const API_URL = "https://www.login.tcsservices.com/";
+//export const API_URL = "https://localhost:7097/";
 
 
 

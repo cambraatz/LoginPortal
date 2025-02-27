@@ -7,20 +7,14 @@ Update Date: 1/7/2025
 *//////////////////////////////////////////////////////////////////////
 
 import { useState, useEffect } from 'react';
-import { useNavigate } from "react-router-dom";
 import Header from './Header';
-import Popup from './Popup';
 import Footer from './Footer';
-import { scrapeDate, 
-    renderDate, 
-    getDate, 
+import { 
     API_URL, 
     cacheToken,
-    requestAccess,
     isCompanyValid,
-    getCompany_DB, 
-    showFailFlag,
-    COMPANIES} from '../scripts/helperFunctions';
+    COMPANIES,
+    MODULES} from '../scripts/helperFunctions';
 
 /*/////////////////////////////////////////////////////////////////////
 
@@ -91,10 +85,6 @@ BASIC STRUCTURE:
 *//////////////////////////////////////////////////////////////////////
 
 const LoginPortal = () => {
-    // Date processing functions ...
-    const currDate = getDate();
-    const navigate = useNavigate();
-
     // check delivery validity onLoad and after message state change...
     useEffect(() => {
         const company = isCompanyValid();
@@ -110,9 +100,6 @@ const LoginPortal = () => {
 
     // initialize company state to null, replace with company on file...
     const [company, setCompany] = useState("");
-
-    // set popup render status...
-    const [message, setMessage] = useState(null);
 
     // state 'driverCredentials' to be passed to next page...
     const [credentials, setCredentials] = useState({
@@ -158,9 +145,9 @@ const LoginPortal = () => {
     *//////////////////////////////////////////////////////////////////
 
     const openPopup = () => {
-        document.getElementById("popupLoginWindow").style.visibility = "visible";
-        document.getElementById("popupLoginWindow").style.opacity = 1;
-        document.getElementById("popupLoginWindow").style.pointerEvents = "auto";  
+        document.getElementById("popupWindow").style.visibility = "visible";
+        document.getElementById("popupWindow").style.opacity = 1;
+        document.getElementById("popupWindow").style.pointerEvents = "auto";  
     };
 
     /*/////////////////////////////////////////////////////////////////
@@ -171,9 +158,9 @@ const LoginPortal = () => {
     *//////////////////////////////////////////////////////////////////
 
     const closePopup = () => {
-        document.getElementById("popupLoginWindow").style.visibility = "hidden";
-        document.getElementById("popupLoginWindow").style.opacity = 0;
-        document.getElementById("popupLoginWindow").style.pointerEvents = "none";
+        document.getElementById("popupWindow").style.visibility = "hidden";
+        document.getElementById("popupWindow").style.opacity = 0;
+        document.getElementById("popupWindow").style.pointerEvents = "none";
         
         // reset driver credentials to default...
         setCredentials({
@@ -276,7 +263,6 @@ const LoginPortal = () => {
     async function handleSubmit(e) {
         // prevent default and reset popup window...
         e.preventDefault();
-        setMessage(null);
 
         // target username and password fields...
         const user_field = document.getElementById("USERNAME");
@@ -332,9 +318,10 @@ const LoginPortal = () => {
         if (data.success) {
             localStorage.setItem('user',data.user);
 
+            // this should be handled in login...
             cacheToken(data.accessToken,data.refreshToken);
             //await getCompanies();
-            console.log("user companies:");
+            console.log("successful user validation + cookie storage:");
             console.log(data.user.Companies);
             console.log(data.user.Modules);
             console.log(data.user);
@@ -384,7 +371,8 @@ const LoginPortal = () => {
         setCredentials(user_data);
 
         // set to new user popup and open...
-        setMessage("New User Signin");
+        setPopupMessage("New User Signin");
+        setPopup("new_user");
         openPopup();
     }
 
@@ -478,6 +466,30 @@ const LoginPortal = () => {
     const [companies, setCompanies] = useState([]);
     const [modules, setModules] = useState([]);
 
+    /*
+    async function cacheToken_local(access,refresh) {
+        const response = fetch(API_URL + "api/Registration/GetCompanies", {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ accessToken: access, refreshToken: refresh })
+        })
+        try {
+            if (response.ok) {
+                console.log('Cookies set securely');
+            } else {
+                console.error('Failes to set cookies');
+            }
+        } 
+        catch (error) {
+            console.error('Error setting cookies:', error);
+        }
+            
+    };
+    */
+
+    /*
     async function getCompanies() {
         // request token from memory, refresh as needed...
         const token = await requestAccess(credentials.USERNAME);
@@ -502,6 +514,7 @@ const LoginPortal = () => {
         console.log(data.companies)
         return data.companies
     }
+    */
 
     async function pressButton(e) {
         localStorage.removeItem('DB');
@@ -533,48 +546,62 @@ const LoginPortal = () => {
                 break;
         }
 
-        setUser({...user, ActiveCompany: COMPANIES[company]});
-        console.log(`Company clicked: ${COMPANIES[company]}`);
+        if (company) {
+            setUser({...user, ActiveCompany: COMPANIES[company]});
+            console.log(`Company clicked: ${COMPANIES[company]}`);
 
-        setPopupMessage("Select Module");
-        setPopup("module");
-        console.log(modules);
-
-        /*// request token from memory, refresh as needed...
-        const token = await requestAccess(credentials.USERNAME);
-        
-        // handle invalid token on login...
-        if (!token) {
-            navigate('/');
+            setPopupMessage("Select Module");
+            setPopup("module");
+            console.log(modules);
             return;
         }
 
-        const response = await fetch(API_URL + "api/Registration/SelectCompany", {
-            method: "POST",
-            body: JSON.stringify({
-                Company: company.COMPANYKEY,
-                AccessToken: token
-            }),
-            headers: {
-                "Authorization": `Bearer ${token}`,
-                'Content-Type': 'application/json'
+        let mod = null;
+        switch(e.target.id){
+            case "md1":
+                console.log(`Clicked ${modules[0]}`);
+                mod = modules[0];
+                break;
+            case "md2":
+                console.log(`Clicked ${modules[1]}`);
+                mod = modules[1];
+                break;
+            case "md3":
+                console.log(`Clicked ${modules[2]}`);
+                mod = modules[2];
+                break;
+            case "md4":
+                console.log(`Clicked ${modules[3]}`);
+                mod = modules[3];
+                break;
+            case "md5":
+                console.log(`Clicked ${modules[4]}`);
+                mod = modules[4];
+                break;
+            default:
+                break;
+        }
+
+        if (mod) {
+            console.log(`Module clicked: ${MODULES[mod]}`);
+
+            console.log(modules);
+
+            localStorage.setItem('company', user.ActiveCompany);
+
+            if (mod === "DLVYCHKOFF") {
+                window.location.href = `https://www.deliverymanager.tcsservices.com/`;
+                //window.location.href = `https://www.admin.tcsservices.com?company=${user.ActiveCompany}&user=${user.Username}/`;
+                //window.location.href = `http://www.deliverymanager.tcsservices.com:40730?company=${user.ActiveCompany}&user=${user.Username}/`;
+            } else if (mod === "ADMIN") {
+                window.location.href = `https://www.admin.tcsservices.com/`;
+            } else {
+                closePopup();
             }
-        })
+            return;
+        }
 
-        if (response.ok) {
-            const data = await response.json();
-            console.log(data);
-
-            localStorage.setItem('accessToken', data.AccessToken);
-            localStorage.setItem('refreshToken', data.RefreshToken);
-
-            window.location.href = `http://www.deliverymanager.tcsservices.com:40730?access_token=${data.AccessToken}/`;
-        } else {
-            console.error("Failed to refresh token");
-            return null;
-        }*/
-
-        //closePopup();
+        closePopup();
     }
 
     const [popup, setPopup] = useState("company");
@@ -585,6 +612,7 @@ const LoginPortal = () => {
             //setPopupMessage("Select Company");
             if (companies.length > 0) {
                 return companies.map((company,i) => {
+                    if (company === "") { return null; }
                     return (
                         <button id={"cp"+(i+1)} key={company+1} type="button" onClick={pressButton}>
                             {COMPANIES[company]}
@@ -602,9 +630,10 @@ const LoginPortal = () => {
             //setPopupMessage("Select Module");
             if (modules.length > 0) {
                 return modules.map((module,i) => {
+                    if (module === "") { return null; }
                     return (
                         <button id={"md"+(i+1)} key={module+1} type="button" onClick={pressButton}>
-                            {module}
+                            {MODULES[module]}
                         </button>
                     );
                 });
@@ -614,6 +643,24 @@ const LoginPortal = () => {
                     <div className="error_placeholder">No Modules Available</div>
                 );
             }
+        } else if (type == "new_user") {
+            return (
+                <>
+                    <div className="input_wrapper">
+                        <label>Username</label>
+                        <input type="text" id="username" value={credentials.USERNAME ? credentials.USERNAME : ""} className="input_form" onChange={updateNewUser}/>
+                        <div className="fail_flag" id="ff_login_nu">
+                            <p>Username was not found!</p>
+                        </div>
+                    </div>
+                    <div id="set_password">
+                        <button id="set_password" className="popup_button" onClick={submitNewUser}>Authorize</button>
+                    </div>
+                    <div id="cancel_user">
+                        <button className="popup_button" onClick={cancelDriver}>Cancel</button>
+                    </div>
+                </>
+            );
         }
     }
 
@@ -656,27 +703,17 @@ const LoginPortal = () => {
             </div>
 
             {/* Popup Logic Below... */}
-            <div id="popupLoginWindow" className="overlay">
-                <div className="popupLogin">
-                    <div id="popupLoginExit" className="content">
-                        <h1 id="close" className="popupLoginWindow" onClick={closePopup}>&times;</h1>
+            <div id="popupWindow" className="overlay">
+                <div className="popup">
+                    <div id="popupExit" className="content">
+                        <h1 id="close" className="popupWindow" onClick={closePopup}>&times;</h1>
                     </div>
-                    <div id="popupLoginPrompt" className="content">
+                    <div id="popupPrompt" className="content">
                         <p>{popupMessage}</p>
                     </div>
 
-                    <div id="login_div">
+                    <div id="login_div" className="popupContent">
                         {renderPopup(popup)}
-                        {/*companies.map((company,i) => {
-                            if (company){
-                                return (
-                                    <button id={"cp"+(i+1)} key={COMPANIES[company]} type="button" onClick={pressButton}>
-                                        {COMPANIES[company]}
-                                    </button>
-                                );
-                            }
-                            return null;
-                        })*/}
                     </div>
                 </div>
             </div>

@@ -25,6 +25,8 @@ using System.Threading.Tasks;
 using System.Security.Cryptography.X509Certificates;
 using Newtonsoft.Json.Linq;
 
+using System.Web;
+
 // add utility to generate JWTs...
 public class TokenService
 {
@@ -98,7 +100,7 @@ API Endpoints (...api/Registration/*):
 
 *//////////////////////////////////////////////////////////////////////////////
 
-namespace DeliveryManager.Server.Controllers
+namespace LoginPortal.Server.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
@@ -112,8 +114,9 @@ namespace DeliveryManager.Server.Controllers
         {
             _configuration = configuration;
             //_tokenService = tokenService;
-            connString = _configuration.GetConnectionString("DriverChecklistTestCon");
-            //connString = _configuration.GetConnectionString("DriverChecklistDBCon");
+            //connString = _configuration.GetConnectionString("DriverChecklistTestCon");
+            connString = _configuration.GetConnectionString("DriverChecklistDBCon");
+            //connString = _configuration.GetConnectionString("TCSWEB");
         }
 
         [HttpPost]
@@ -223,7 +226,7 @@ namespace DeliveryManager.Server.Controllers
                 user = new User
                 {
                     Username = row["USERNAME"].ToString(),
-                    Permissions = row["PERMISSIONS"] != DBNull.Value ? Convert.ToBoolean(row["PERMISSIONS"]) : false,
+                    Permissions = row["PERMISSIONS"] != DBNull.Value ? row["PERMISSIONS"].ToString() : null,
                     Powerunit = row["POWERUNIT"] != DBNull.Value ? row["POWERUNIT"].ToString() : null,
                     ActiveCompany = row["COMPANYKEY01"] != DBNull.Value ? row["COMPANYKEY01"].ToString() : null,
                     Companies = new List<string>(),
@@ -255,6 +258,30 @@ namespace DeliveryManager.Server.Controllers
                 // generate token...
                 var tokenService = new TokenService(_configuration);
                 (string accessToken, string refreshToken) = tokenService.GenerateToken(credentials.USERNAME);
+
+                //var isHttps = Request.IsHttps;
+
+                var cookieOptions = new CookieOptions
+                {
+                    HttpOnly = true, // Makes it inaccessible to JavaScript
+                    Secure = true, // Ensures the cookie is only sent over HTTPS
+                    SameSite = SameSiteMode.None, // Allows sharing across subdomains
+                    Domain = ".tcsservices.com", // Cookie available for all subdomains of domain.com
+                    Expires = DateTimeOffset.UtcNow.AddMinutes(15) // Set expiry for access token (e.g., 15 minutes)
+                };
+
+                Response.Cookies.Append("access_token", accessToken, cookieOptions);
+
+                cookieOptions.Expires = DateTimeOffset.UtcNow.AddDays(1);
+                Response.Cookies.Append("refresh_token", refreshToken, cookieOptions);
+
+                /*
+                Response.Cookies.Append("user", user.Username, cookieOptions);
+                Response.Cookies.Append("powerunit", user.Powerunit, cookieOptions);
+                Response.Cookies.Append("company", user.ActiveCompany, cookieOptions);
+                Response.Cookies.Append("accessToken", accessToken, cookieOptions);
+                Response.Cookies.Append("refreshToken", refreshToken, cookieOptions);
+                */
 
                 return new JsonResult(new 
                 { 
