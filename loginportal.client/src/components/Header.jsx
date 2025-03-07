@@ -4,34 +4,6 @@ import UserWidget from './UserWidget';
 //const Header = (props) => {
 const Header = ({ company, currUser, title, status, header, toggle, MFSTDATE, POWERUNIT, alt, onClick }) => {
     const companyName = company !== "" ? company.split(' ') : [""];
-    /*
-    const deliveryHeader = () => {
-        let header = (
-            <>
-                <div id="title_div">
-                    {company.map((word, index) => (<h4 className="TCS_title" key={index}>{word}</h4>))}
-                </div>
-                <div className="sticky_header" onClick={props.onClick}>
-                    <div id="main_title">
-                        <h1>Operations Manager</h1>
-                        <h2 id="title_dash">-</h2>
-                        <h2>{props.title}</h2>
-                    </div>
-                    <UserWidget 
-                        company={props.company}
-                        driver={props.currUser} 
-                        status={props.status} 
-                        header={props.header} 
-                        MFSTDATE={props.MFSTDATE} 
-                        POWERUNIT={props.POWERUNIT} 
-                        toggle={props.toggle}/>
-                </div>
-            </>
-        );
-        
-        return header;
-    }*/
-    
 
     return(
         <>

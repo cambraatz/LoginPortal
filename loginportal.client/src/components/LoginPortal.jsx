@@ -11,10 +11,11 @@ import Header from './Header';
 import Footer from './Footer';
 import { 
     API_URL, 
-    cacheToken,
-    isCompanyValid,
     COMPANIES,
-    MODULES} from '../scripts/helperFunctions';
+    MODULES,
+    resetStyling,
+    flagError,
+    errorStyling} from '../scripts/helperFunctions';
 
 /*/////////////////////////////////////////////////////////////////////
 
@@ -87,19 +88,10 @@ BASIC STRUCTURE:
 const LoginPortal = () => {
     // check delivery validity onLoad and after message state change...
     useEffect(() => {
-        const company = isCompanyValid();
-        if (!company) {
-            renderCompany();
-        } else {
-            setCompany(company);
-        }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        cleanSlate();
     }, [])
 
     /* Site state & location processing functions... */
-
-    // initialize company state to null, replace with company on file...
-    const [company, setCompany] = useState("");
 
     // state 'driverCredentials' to be passed to next page...
     const [credentials, setCredentials] = useState({
@@ -111,29 +103,20 @@ const LoginPortal = () => {
     const [header,setHeader] = useState("open");
 
     /* Page rendering helper functions... */
+    async function cleanSlate() {
+        localStorage.clear();
+        sessionStorage.clear();
 
-    /*/////////////////////////////////////////////////////////////////
-    // retrieve company from database when not in memory...
-    [void] : renderCompany() {
-        fetch company name from database (if present)
-        if (company is valid):
-            setCompany(company)
-        else:
-            setCompany to placeholder
-    } 
-    *//////////////////////////////////////////////////////////////////
-    
-    async function renderCompany() {
-        // getCompany() also caches company...
-        //const company = await getCompany_DB();
-        const company = "Transportation Computer Support, LLC.";
-        // set company state to value or placeholder... 
-        if(company) {
-            console.log(`renderCompany retrieved ${company} from database...`);
-            setCompany(company);
+        const response = await fetch(API_URL + "api/Registration/Logout", {
+            method: "POST",
+            headers: {
+                'Content-Type': 'application/json; charset=UTF-8'
+            },
+        })
+        if (response.ok) {
+            console.log("Cookies have been cleared successfully.");
         } else {
-            console.log(`renderCompany could not find company...`);
-            setCompany("No Company Set");
+            console.alert("Cookie removal failed, Logout failure.")
         }
     }
 
@@ -207,8 +190,9 @@ const LoginPortal = () => {
     const handleLoginChange = (e) => {
         // reset styling to default...
         if(document.getElementById(e.target.id).classList.contains("invalid_input")){
-            document.getElementById("USERNAME").classList.remove("invalid_input");
-            document.getElementById("PASSWORD").classList.remove("invalid_input");
+            //document.getElementById("USERNAME").classList.remove("invalid_input");
+            //document.getElementById("PASSWORD").classList.remove("invalid_input");
+            resetStyling(["USERNAME","PASSWORD"]);
         }
 
         // handle username + password field changes...
@@ -291,19 +275,9 @@ const LoginPortal = () => {
 
         // catch and alert user to incomplete fields...
         if (code >= 0) {
-            // initialize flag contents...
-            const flag = document.getElementById(elementID);
-            flag.querySelector("p").innerHTML = alerts[code];
-
-            // make visible for 1.5 seconds and hide again...
-            flag.classList.add("visible");
-            setTimeout(() => {
-                flag.classList.remove("visible");
-            },1500)
-            //showFailFlag(elementID,alerts[code]);
+            flagError(elementID,alerts[code])
             return;
         }
-        //validateCredentials(driverCredentials.USERNAME,driverCredentials.PASSWORD);
 
         const response = await fetch(API_URL + "api/Registration/Login", {
             body: JSON.stringify(credentials),
@@ -312,35 +286,29 @@ const LoginPortal = () => {
                 'Content-Type': 'application/json; charset=UTF-8'
             }
         })
+
         const data = await response.json();
         console.log(data);
 
         if (data.success) {
-            localStorage.setItem('user',data.user);
-
-            // this should be handled in login...
-            cacheToken(data.accessToken,data.refreshToken);
-            //await getCompanies();
-            console.log("successful user validation + cookie storage:");
-            console.log(data.user.Companies);
-            console.log(data.user.Modules);
-            console.log(data.user);
-            
+            // update state values to curr user...      
             setUser(data.user);
             setCompanies(data.user.Companies);
             setModules(data.user.Modules);
             
+            // initialize company/module selection popup...
             setPopupMessage("Select Company");
             setPopup("company");
             openPopup();
         } else {
+            // reset state values to null...
             setCompanies([]);
             setModules([]);
             setPopup(null);
 
-            // trigger red borders for errors...
-            document.getElementById("USERNAME").classList.add("invalid_input");
-            document.getElementById("PASSWORD").classList.add("invalid_input");
+            // render error flag + set error styling...
+            flagError("ff_login_pw", "Invalid user credentials");
+            errorStyling(["USERNAME","PASSWORD"]);
         }
         
     };
@@ -467,29 +435,6 @@ const LoginPortal = () => {
     const [modules, setModules] = useState([]);
 
     /*
-    async function cacheToken_local(access,refresh) {
-        const response = fetch(API_URL + "api/Registration/GetCompanies", {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ accessToken: access, refreshToken: refresh })
-        })
-        try {
-            if (response.ok) {
-                console.log('Cookies set securely');
-            } else {
-                console.error('Failes to set cookies');
-            }
-        } 
-        catch (error) {
-            console.error('Error setting cookies:', error);
-        }
-            
-    };
-    */
-
-    /*
     async function getCompanies() {
         // request token from memory, refresh as needed...
         const token = await requestAccess(credentials.USERNAME);
@@ -517,8 +462,9 @@ const LoginPortal = () => {
     */
 
     async function pressButton(e) {
-        localStorage.removeItem('DB');
-        localStorage.removeItem('company');
+        // ** these should be okay to remove ** 
+        //localStorage.removeItem('DB');
+        //localStorage.removeItem('company');
 
         let company = null;
         switch(e.target.id){
@@ -548,7 +494,21 @@ const LoginPortal = () => {
 
         if (company) {
             setUser({...user, ActiveCompany: COMPANIES[company]});
-            console.log(`Company clicked: ${COMPANIES[company]}`);
+            //console.log(`Company clicked: ${COMPANIES[company]}`);
+
+            const response = await fetch(API_URL + "api/Registration/SetCompany", {
+                body: JSON.stringify({ 
+                    username: credentials.USERNAME, 
+                    company: Object.keys(COMPANIES).find(key => COMPANIES[key] === COMPANIES[company]) 
+                }),
+                method: "POST",
+                headers: {
+                    'Content-Type': 'application/json; charset=UTF-8'
+                }
+            });
+
+            const data = await response.json();
+            console.log("data: ", data);
 
             setPopupMessage("Select Module");
             setPopup("module");
@@ -587,12 +547,12 @@ const LoginPortal = () => {
 
             console.log(modules);
 
-            localStorage.setItem('company', user.ActiveCompany);
+            // ** these should be okay to remove **
+            //localStorage.setItem('company', user.ActiveCompany);
+            //const companyKey = Object.keys(COMPANIES).find(key => COMPANIES[key] === user.ActiveCompany); 
 
             if (mod === "DLVYCHKOFF") {
                 window.location.href = `https://www.deliverymanager.tcsservices.com/`;
-                //window.location.href = `https://www.admin.tcsservices.com?company=${user.ActiveCompany}&user=${user.Username}/`;
-                //window.location.href = `http://www.deliverymanager.tcsservices.com:40730?company=${user.ActiveCompany}&user=${user.Username}/`;
             } else if (mod === "ADMIN") {
                 window.location.href = `https://www.admin.tcsservices.com/`;
             } else {
@@ -668,16 +628,11 @@ const LoginPortal = () => {
     return(
         <div id="webpage">
             <Header 
-                company={company}
+                company="Transportation Computer Support, LLC."
                 title="Login Portal"
                 alt="Enter your login credentials"
                 status="Off"
                 currUser="Sign In"
-                MFSTDATE={null}
-                POWERUNIT={null}
-                STOP = {null}
-                PRONUMBER = {null}
-                MFSTKEY = {null}
                 toggle={header}
                 onClick={collapseHeader}
             />

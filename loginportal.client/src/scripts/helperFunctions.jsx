@@ -197,6 +197,38 @@ export const scrapeFile = (file) => {
     return relLink;
 };
 
+export const resetStyling = (elmts) => {
+    elmts.forEach((el) => {
+        const element = document.getElementById(el);
+
+        if (element && element.classList.contains("invalid_input")) {
+            element.classList.remove("invalid_input");
+        }
+    });
+};
+
+export const errorStyling = (elmts) => {
+    elmts.forEach((el) => {
+        const element = document.getElementById(el);
+
+        if (element) {
+            element.classList.add("invalid_input");
+        }
+    });
+};
+
+export const flagError = (target,message) => {
+    // initialize flag contents...
+    const flag = document.getElementById(target);
+    flag.querySelector("p").innerHTML = message;
+
+    // make visible for 1.5 seconds and hide again...
+    flag.classList.add("visible");
+    setTimeout(() => {
+        flag.classList.remove("visible");
+    },1500)
+};
+
 export const COMPANIES = {
     BRAUNS: "Brauns Express Inc.",
     NTS: "Normandin Trucking Services, LLC.",

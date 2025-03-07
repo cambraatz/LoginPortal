@@ -2,7 +2,7 @@
 {
     public class User
     {
-        public string Username { get; set; }
+        public string? Username { get; set; }
         public string? Permissions {  get; set; }
         public string? Powerunit { get; set; }
         public string? ActiveCompany { get; set; }

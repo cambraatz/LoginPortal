@@ -26,6 +26,7 @@ using System.Security.Cryptography.X509Certificates;
 using Newtonsoft.Json.Linq;
 
 using System.Web;
+using System.Net;
 
 // add utility to generate JWTs...
 public class TokenService
@@ -225,7 +226,7 @@ namespace LoginPortal.Server.Controllers
                 // initialize user values...
                 user = new User
                 {
-                    Username = row["USERNAME"].ToString(),
+                    Username = row["USERNAME"] != DBNull.Value ? row["USERNAME"].ToString() : null,
                     Permissions = row["PERMISSIONS"] != DBNull.Value ? row["PERMISSIONS"].ToString() : null,
                     Powerunit = row["POWERUNIT"] != DBNull.Value ? row["POWERUNIT"].ToString() : null,
                     ActiveCompany = row["COMPANYKEY01"] != DBNull.Value ? row["COMPANYKEY01"].ToString() : null,
@@ -271,6 +272,8 @@ namespace LoginPortal.Server.Controllers
                 };
 
                 Response.Cookies.Append("access_token", accessToken, cookieOptions);
+                Response.Cookies.Append("username", user.Username, cookieOptions);
+                Response.Cookies.Append("company", user.ActiveCompany, cookieOptions);
 
                 cookieOptions.Expires = DateTimeOffset.UtcNow.AddDays(1);
                 Response.Cookies.Append("refresh_token", refreshToken, cookieOptions);
@@ -294,6 +297,114 @@ namespace LoginPortal.Server.Controllers
             else
             {
                 return new JsonResult(new { success = false, message = "Invalid Credentials" });
+            }
+        }
+
+        [HttpPost]
+        [Route("Logout")]
+
+        public IActionResult Logout()
+        {
+            CookieOptions options = new CookieOptions
+            {
+                Expires = DateTime.UtcNow.AddDays(-1),
+                HttpOnly = true,
+                Secure = true,
+                Domain = ".tcsservices.com",
+            };
+
+            Response.Cookies.Append("access_token", "", options);
+            Response.Cookies.Append("refresh_token", "", options);
+            Response.Cookies.Append("username", "", options);
+            Response.Cookies.Append("company", "", options);
+
+            return Ok(new { message = "Logged out successfully" });
+        }
+        public class SetCompanyRequest
+        {
+            public string Username { get; set; }
+            public string Company { get; set; }
+        }
+
+        [HttpPost]
+        [Route("SetCompany")]
+        public async Task<JsonResult> SetCompany([FromBody] SetCompanyRequest request)
+        {
+            try
+            {
+                Response.Cookies.Append("company", request.Company, new CookieOptions
+                {
+                    HttpOnly = true, // Makes it inaccessible to JavaScript
+                    Secure = true, // Ensures the cookie is only sent over HTTPS
+                    SameSite = SameSiteMode.None, // Allows sharing across subdomains
+                    Domain = ".tcsservices.com", // Cookie available for all subdomains of domain.com
+                    Expires = DateTimeOffset.UtcNow.AddMinutes(15) // Set expiry for access token (e.g., 15 minutes)
+                });
+
+                string query = @" select COMPANYKEY01, COMPANYKEY02, COMPANYKEY03, COMPANYKEY04, COMPANYKEY05
+                            from dbo.USERS where USERNAME COLLATE SQL_Latin1_General_CP1_CS_AS = @USERNAME";
+
+                DataTable table = new DataTable();
+                string sqlDatasource = connString;
+                SqlDataReader myReader;
+
+                await using (SqlConnection myCon = new SqlConnection(sqlDatasource))
+                {
+                    myCon.Open();
+                    using (SqlCommand myCommand = new SqlCommand(query, myCon))
+                    {
+                        myCommand.Parameters.AddWithValue("@USERNAME", request.Username);
+
+                        myReader = myCommand.ExecuteReader();
+                        table.Load(myReader);
+                        myReader.Close();
+                    }
+
+                    if (table.Rows.Count > 0)
+                    {
+                        DataRow row = table.Rows[0];
+                        List<string> companies = new List<string>
+                        {
+                            row["COMPANYKEY01"]?.ToString(),
+                            row["COMPANYKEY02"]?.ToString(),
+                            row["COMPANYKEY03"]?.ToString(),
+                            row["COMPANYKEY04"]?.ToString(),
+                            row["COMPANYKEY05"]?.ToString()
+                        };
+
+                        int index = companies.IndexOf(request.Company);
+
+                        if (index > 0)
+                        {
+                            string swapColumn = $"COMPANYKEY0{index + 1}";
+                            string prevCompany = companies[0];
+
+                            (companies[0], companies[index]) = (companies[index], companies[0]);
+
+                            string updateQuery = $@" update dbo.USERS set COMPANYKEY01 = @NewCompany01, {swapColumn} = @NewCompanyOther
+                                                where USERNAME COLLATE SQL_Latin1_General_CP1_CS_AS = @USERNAME";
+
+                            using (SqlCommand myCommand = new SqlCommand(updateQuery, myCon))
+                            {
+                                myCommand.Parameters.AddWithValue("NewCompany01", companies[0]);
+                                myCommand.Parameters.AddWithValue("NewCompanyOther", companies[index]);
+                                myCommand.Parameters.AddWithValue("@USERNAME", request.Username);
+
+                                myCommand.ExecuteNonQuery();
+                            }
+                        }
+                    }
+                }
+                var contents = Request.Cookies["company"];
+                if (contents != null && contents == request.Company)
+                {
+                    return new JsonResult(new { success = true, company = contents });
+                }
+                return new JsonResult(new { success = false, message = "Cookie did not update" });
+            }
+            catch (Exception ex)
+            {
+                return new JsonResult(new { success = false, message = "Cookie not found:" + ex });
             }
         }
 

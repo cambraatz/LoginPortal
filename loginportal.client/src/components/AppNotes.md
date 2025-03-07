@@ -107,37 +107,41 @@ Change the config file to include SSL functionality.
 `admin.conf`
 ```
 <VirtualHost *:80>
-    ServerName www.admin.tcsservices.com
-    ServerAlias admin.tcsservices.com
-    DocumentRoot /var/www/admin
+    ServerName www.login.tcsservices.com
+    ServerAlias login.tcsservices.com
+    DocumentRoot /var/www/login
 
-    # Error and access log configuration
-    ErrorLog /var/www/admin/log/error.log
-    CustomLog /var/www/admin/log/requests.log combined
+    ErrorLog /var/www/login/log/error.log
+    CustomLog /var/www/login/log/requests.log combined
 
-    # Redirect all HTTP traffic to HTTPS
-    Redirect permanent / https://admin.tcsservices.com/
+    Redirect permanent / https://login.tcsservices.com/
 </VirtualHost>
 
 <VirtualHost *:443>
-    ServerName www.admin.tcsservices.com
-    ServerAlias admin.tcsservices.com
-    DocumentRoot /var/www/admin
+    ServerName www.login.tcsservices.com
+    ServerAlias login.tcsservices.com *.login.tcsservices.com
+    DocumentRoot /var/www/login
 
-    # SSL configuration
     SSLEngine on
-    SSLCertificateFile /etc/ssl/certs/admin.crt
-    SSLCertificateKeyFile /etc/ssl/private/admin.key
+    SSLProxyEngine on
+    SSLProxyVerify none
 
-    # Error and access log configuration
-    ErrorLog /var/www/admin/log/error.log
-    CustomLog /var/www/admin/log/requests.log combined
+    ProxyPreserveHost On
+    ProxyPass / http://127.0.0.1:6000/
+    ProxyPassReverse / http://127.0.0.1:6000/
+    
+    ErrorLog /var/www/login/log/error.log
+    CustomLog /var/www/login/log/requests.log combined
 
-    # Optional: Add SSL protocols and ciphers (for security)
     SSLOptions +StrictRequire
     SSLProtocol all -SSLv2 -SSLv3
-    SSLCipherSuite HIGH:!aNULL:!MD5
+    SSLCipherSuite HIGH:!aNULL:!MD5:!3DES:!RC4:!LOW:!EXP:!PSK:!SRP
     SSLHonorCipherOrder on
+
+    Include /etc/letsencrypt/options-ssl-apache.conf
+    SSLCertificateFile /etc/letsencrypt/live/login.tcsservices.com/cert.pem
+    SSLCertificateKeyFile /etc/letsencrypt/live/login.tcsservices.com/privkey.pem
+    SSLCertificateChainFile /etc/letsencrypt/live/login.tcsservices.com/chain.pem
 </VirtualHost>
 ```
 
@@ -278,6 +282,76 @@ It was a bit round-robin, but the dump below explores all the commands that addr
 ```
 When establishing next module, go through commands above and select only those that are critical to the process. It is also worth looking into to establish security on the keys once again, likely by adding DM_User to the ownership group.
 
+The process for getting the existing login service hosted and functional over HTTPS is seen in the lines below:
+```
+936  sudo certbot --apache -d deliverymanager.tcsservices.com -d www.deliverymanager.tcsservices.com
+  937  sudo certbot certificates
+  938  cat /etc/crontab
+  939  ls -l /etc/cron.d/
+  940  ps aux | grep cron
+  941  crontab -l
+  942  sudo certbot renew --dry-run
+  943  crontab -l
+  944  sudo certbot certificates
+  945  ls -l /etc/letsencrypt/live
+  946  ls -l /etc/letsencrypt/live/deliverymanager.tcsservices.com
+  947  ls -l /etc/letsencrypt/live/login.tcsservices.com
+  948  ls -l /etc/letsencrypt/archive/login.tcsservices.com/
+  949  ls -l /etc/letsencrypt/archive/deliverymanager.tcsservices.com/
+  950  sudo chmod 640 /etc/letsencrypt/archive/deliverymanager.tcsservices.com/privkey1.pem
+  951  ls -l /etc/letsencrypt/archive/deliverymanager.tcsservices.com/
+  952  sudo chmod 644 /etc/letsencrypt/archive/deliverymanager.tcsservices.com/privkey1.pem
+  953  ls -l /etc/letsencrypt/archive/deliverymanager.tcsservices.com/
+  954  sudo chmod 640 /etc/letsencrypt/archive/deliverymanager.tcsservices.com/privkey1.pem
+  955  sudo chmod 644 /etc/letsencrypt/archive/deliverymanager.tcsservices.com/privkey1.pem
+  956  sudo -u DM_User cat /etc/letsencrypt/live/deliverymanager.tcsservices.com/privkey.pem
+  957  cd /etc/systemd/system
+  958  ls
+  959  cat kestrel-login.service
+  960  vim kestrel-deliverymanager.service
+  961  systemctl restart kestrel-deliverymanager.service
+  962  systemctl daemon reload
+  963  systemctl daemon-reload
+  964  systemctl restart kestrel-deliverymanager.service
+  965  systemctl status kestrel-deliverymanager.service
+  966  cd /etc/httpd
+  967  ls
+  968  cd sites-available
+  969  ls
+  970  cat deliverymanager.conf
+  971  vim deliverymanager.conf
+  972  ls
+  973  cat deliverymanager-le-ssl.conf
+  974  cat login.conf
+  975  mv deliverymanager-le-ssl.conf deliverymanager-le-ssl.conf.bak
+  976  ls
+  977  vim deliverymanager.conf
+  978  ls
+  979  cp deliverymanager.conf deliverymanager.conf.bak
+  980  ls
+  981  vim deliverymanager.conf
+  982  systemctl restart httpd
+  983  vim deliverymanager.conf
+  984  systemctl restart httpd
+  985  systemctl status httpd.service
+  986  systemctl status httpd.service -l
+  987  vim /etc/httpd/conf/httpd.conf
+  988  systemctl restart httpd
+  989  systemctl status httpd.service -l
+  990  history
+  991  systemctl status kestrel-deliverymanager.service
+  992  systemctl status kestrel-login.service
+  993  sudo /usr/bin/deploy_app.sh
+  994  ls
+  995  exit
+  996  history
+  997  sudo /usr/bin/deploy_app.sh
+  998  exit
+  999  history
+```
+
+NOTE: common debug step is to ensure .NET program.cs file specifies the same port that has been assigned in the steps above.
+
 **directory permissions**
 ```
 [root@server login]# ls -l /etc/letsencrypt/archive/login.tcsservices.com/
@@ -308,6 +382,35 @@ chmod -R 755 kestrel-admin.service
 systemctl enable kestrel-admin.service
 systemctl start kestrel-admin.service
 systemctl status kestrel-admin.service
+```
+
+`[root@server system]# cat kestrel-login.service`
+```
+[Unit]
+Description=.NET WebAPI Login App running on CentOS7
+
+[Service]
+WorkingDirectory=/var/www/login
+ExecStart=/usr/share/dotnet/dotnet /var/www/login/LoginPortal.Server.dll
+Restart=always
+# Restart service after 10 seconds if the dotnet service crashes:
+RestartSec=10
+KillSignal=SIGINT
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=dotnet-DM
+
+User=DM_User
+Environment=ASPNETCORE_ENVIRONMENT=Production
+Environment=DOTNET_CLI_HOME=/tmp
+Environment=ASPNETCORE_URLS=https://0.0.0.0:6000
+Environment=ASPNETCORE_Kestrel__Certificates__Default__Path=/etc/letsencrypt/live/login.tcsservices.com/fullchain.pem
+Environment=ASPNETCORE_Kestrel__Certificates__Default__KeyPath=/etc/letsencrypt/live/login.tcsservices.com/privkey.pem
+
+
+[Install]
+WantedBy=multi-user.target
 ```
 
 # End of Routine Notes

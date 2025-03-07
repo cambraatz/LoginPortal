@@ -21,18 +21,9 @@ builder.WebHost.ConfigureKestrel(options =>
 builder.Services.AddCors(options => {
     options.AddPolicy(name: MyAllowSpecificOrigins,
         policy => {
-            policy.WithOrigins("http://www.tcsservices.com:40730",
-                                "www.tcsservices.com:40730",
-                                "tcsservices.com/40730",
-                                "http://www.login.tcsservices.com:40730",
-                                "www.login.tcsservices.com:40730",
-                                "login.tcsservices.com:40730",
-                                "https://localhost:5173",
+            policy.WithOrigins("https://localhost:5173",
                                 "http://www.login.tcsservices.com",
-                                "http://www.deliverymanager.tcsservices.com:40730",
-                                "www.deliverymanager.tcsservices.com:40730",
-                                "deliverymanager.tcsservices.com:40730",
-                                "https://www.login.tcsservices.com",
+                                "https://login.tcsservices.com",
                                 "www.login.tcsservices.com",
                                 "login.tcsservices.com")
                                 .AllowAnyHeader()
