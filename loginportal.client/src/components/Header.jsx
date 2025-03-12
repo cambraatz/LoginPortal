@@ -2,7 +2,7 @@ import PropTypes from 'prop-types';
 import UserWidget from './UserWidget';
 
 //const Header = (props) => {
-const Header = ({ company, currUser, title, status, header, toggle, MFSTDATE, POWERUNIT, alt, onClick }) => {
+const Header = ({ company, currUser, title, toggle, alt, onClick }) => {
     const companyName = company !== "" ? company.split(' ') : [""];
 
     return(
@@ -19,12 +19,7 @@ const Header = ({ company, currUser, title, status, header, toggle, MFSTDATE, PO
                     <h2>{title}</h2>
                 </div>
                 <UserWidget 
-                    company={company}
-                    driver={currUser} 
-                    status={status} 
-                    header={header} 
-                    MFSTDATE={MFSTDATE} 
-                    POWERUNIT={POWERUNIT} 
+                    driver={currUser}   
                     toggle={toggle}/>
             </div>
         </header>
@@ -41,11 +36,7 @@ Header.propTypes = {
     company: PropTypes.string.isRequired,
     currUser: PropTypes.string.isRequired,
     title: PropTypes.string.isRequired, 
-    status: PropTypes.string.isRequired,
     toggle: PropTypes.string.isRequired,
-    header: PropTypes.string,
-    MFSTDATE: PropTypes.string,
-    POWERUNIT: PropTypes.string,
     alt: PropTypes.string.isRequired,
     onClick: PropTypes.func.isRequired
 };

@@ -113,10 +113,9 @@ const LoginPortal = () => {
                 'Content-Type': 'application/json; charset=UTF-8'
             },
         })
-        if (response.ok) {
-            console.log("Cookies have been cleared successfully.");
-        } else {
-            console.alert("Cookie removal failed, Logout failure.")
+        if (!response.ok) {
+            //console.log("Cookies have been cleared successfully.");
+            console.alert("Cookie removal failed, Logout failure.");
         }
     }
 
@@ -150,6 +149,10 @@ const LoginPortal = () => {
             USERNAME: "",
             PASSWORD: ""
         });
+
+        setUser(default_user);
+
+        cleanSlate();
     };
 
     /*/////////////////////////////////////////////////////////////////
@@ -190,8 +193,6 @@ const LoginPortal = () => {
     const handleLoginChange = (e) => {
         // reset styling to default...
         if(document.getElementById(e.target.id).classList.contains("invalid_input")){
-            //document.getElementById("USERNAME").classList.remove("invalid_input");
-            //document.getElementById("PASSWORD").classList.remove("invalid_input");
             resetStyling(["USERNAME","PASSWORD"]);
         }
 
@@ -235,14 +236,15 @@ const LoginPortal = () => {
     }
     *//////////////////////////////////////////////////////////////////
 
-    const [user, setUser] = useState({
-        Username: null,
+    const default_user = {
+        Username: "Sign In",
         Permissions: null,
         Powerunit: null,
         ActiveCompany: null,
         Companies: null,
         Modules: null
-    });
+    };
+    const [user, setUser] = useState(default_user);
 
     async function handleSubmit(e) {
         // prevent default and reset popup window...
@@ -288,7 +290,7 @@ const LoginPortal = () => {
         })
 
         const data = await response.json();
-        console.log(data);
+        //console.log(data);
 
         if (data.success) {
             // update state values to curr user...      
@@ -305,6 +307,7 @@ const LoginPortal = () => {
             setCompanies([]);
             setModules([]);
             setPopup(null);
+            //setUser(default_user);
 
             // render error flag + set error styling...
             flagError("ff_login_pw", "Invalid user credentials");
@@ -401,7 +404,6 @@ const LoginPortal = () => {
     *//////////////////////////////////////////////////////////////////
 
     async function updateNewUser(e) {
-        //if (document.getElementById(e.target.id).className == "invalid_input"){
         if (document.getElementById(e.target.id).classList.contains("invalid_input")){
             // reset styling to default...
             document.getElementById("username").classList.remove("invalid_input");
@@ -434,68 +436,31 @@ const LoginPortal = () => {
     const [companies, setCompanies] = useState([]);
     const [modules, setModules] = useState([]);
 
-    /*
-    async function getCompanies() {
-        // request token from memory, refresh as needed...
-        const token = await requestAccess(credentials.USERNAME);
-        
-        // handle invalid token on login...
-        if (!token) {
-            navigate('/');
-            return;
-        }
-
-        const response = await fetch(API_URL + "api/Registration/GetCompanies", {
-            method: "GET",
-            headers: {
-                "Authorization": `Bearer ${token}`,
-            }
-        })
-    
-        const data = await response.json();
-        console.log(data);
-
-        setCompanies(data.companies);
-        console.log(data.companies)
-        return data.companies
-    }
-    */
-
     async function pressButton(e) {
-        // ** these should be okay to remove ** 
-        //localStorage.removeItem('DB');
-        //localStorage.removeItem('company');
-
         let company = null;
         switch(e.target.id){
             case "cp1":
-                console.log(`Clicked ${companies[0]}`);
                 company = companies[0];
                 break;
             case "cp2":
-                console.log(`Clicked ${companies[1]}`);
                 company = companies[1];
                 break;
             case "cp3":
-                console.log(`Clicked ${companies[2]}`);
                 company = companies[2];
                 break;
             case "cp4":
-                console.log(`Clicked ${companies[3]}`);
                 company = companies[3];
                 break;
             case "cp5":
-                console.log(`Clicked ${companies[4]}`);
                 company = companies[4];
                 break;
             default:
+                console.log(`Clicked ${company}`);
                 break;
         }
 
         if (company) {
             setUser({...user, ActiveCompany: COMPANIES[company]});
-            //console.log(`Company clicked: ${COMPANIES[company]}`);
-
             const response = await fetch(API_URL + "api/Registration/SetCompany", {
                 body: JSON.stringify({ 
                     username: credentials.USERNAME, 
@@ -507,12 +472,15 @@ const LoginPortal = () => {
                 }
             });
 
-            const data = await response.json();
-            console.log("data: ", data);
+            if (!response.ok) {
+                console.alert("Company selection failed");
+            }
+            //const data = await response.json();
+            //console.log("data: ", data);
 
             setPopupMessage("Select Module");
             setPopup("module");
-            console.log(modules);
+            //console.log(modules);
             return;
         }
 
@@ -543,14 +511,6 @@ const LoginPortal = () => {
         }
 
         if (mod) {
-            console.log(`Module clicked: ${MODULES[mod]}`);
-
-            console.log(modules);
-
-            // ** these should be okay to remove **
-            //localStorage.setItem('company', user.ActiveCompany);
-            //const companyKey = Object.keys(COMPANIES).find(key => COMPANIES[key] === user.ActiveCompany); 
-
             if (mod === "DLVYCHKOFF") {
                 window.location.href = `https://www.deliverymanager.tcsservices.com/`;
             } else if (mod === "ADMIN") {
@@ -569,7 +529,6 @@ const LoginPortal = () => {
 
     const renderPopup = (type) => {
         if (type == "company") {
-            //setPopupMessage("Select Company");
             if (companies.length > 0) {
                 return companies.map((company,i) => {
                     if (company === "") { return null; }
@@ -580,14 +539,12 @@ const LoginPortal = () => {
                     );
                 });
             } else {
-                //setPopupMessage("No Available Companies, Contact Admin.");
                 return(
                     <div className="error_placeholder">No Companies Available</div>
                 );
             }
             
         } else if (type == "module") {
-            //setPopupMessage("Select Module");
             if (modules.length > 0) {
                 return modules.map((module,i) => {
                     if (module === "") { return null; }
@@ -598,7 +555,6 @@ const LoginPortal = () => {
                     );
                 });
             } else {
-                //setPopupMessage("No Available Modules, Contact Admin.");
                 return(
                     <div className="error_placeholder">No Modules Available</div>
                 );
@@ -632,7 +588,7 @@ const LoginPortal = () => {
                 title="Login Portal"
                 alt="Enter your login credentials"
                 status="Off"
-                currUser="Sign In"
+                currUser={user.Username}
                 toggle={header}
                 onClick={collapseHeader}
             />
