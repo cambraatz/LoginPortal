@@ -27,6 +27,7 @@ using Newtonsoft.Json.Linq;
 
 using System.Web;
 using System.Net;
+using Microsoft.AspNetCore.DataProtection.KeyManagement;
 
 // add utility to generate JWTs...
 public class TokenService
@@ -174,6 +175,169 @@ namespace LoginPortal.Server.Controllers
             return Unauthorized("Invalid Token.");
         }
 
+        [HttpPost]
+        [Route("GetCookie")]
+        public IActionResult GetCookie([FromBody] string key)
+        {
+            var value = Request.Cookies[key];
+            if (string.IsNullOrEmpty(value))
+            {
+                return new JsonResult(new { success = false, value = $"{key} cookie was not found." });
+            }
+
+            return new JsonResult(new { success = true, value = value });
+        }
+
+        [HttpPost]
+        [Route("GetUser")]
+        public IActionResult GetUser()
+        {
+            bool result;
+            if (bool.TryParse(Request.Cookies["return"], out result))
+            {
+                return new JsonResult(new { success = false, message = "Invalid return boolean cookie." });
+            }
+            string username = Request.Cookies["username"];
+            if (string.IsNullOrEmpty(username))
+            {
+                return new JsonResult(new { success = false, message = "Invalid username cookie." });
+            }
+            return new JsonResult(new { success = true, user = username, message = "Valid return boolean cookie found." });
+        }
+
+        // INACTIVE?????????
+        [HttpPost]
+        [Route("PullCredentials")]
+        public async Task<JsonResult> PullCredentials()
+        {
+            bool result;
+            if (!bool.TryParse(Request.Cookies["return"], out result))
+            {
+                return new JsonResult(new { success = false, message = "Valid return boolean not found." });
+            }
+
+            Response.Cookies.Append("return", "", new CookieOptions
+            {
+                HttpOnly = true, // Makes it inaccessible to JavaScript
+                Secure = true, // Ensures the cookie is only sent over HTTPS
+                SameSite = SameSiteMode.None, // Allows sharing across subdomains
+                Domain = ".tcsservices.com", // Cookie available for all subdomains of domain.com
+                Expires = DateTimeOffset.UtcNow.AddDays(-1), // Set expiry for access token (e.g., 15 minutes)
+                Path = "/"
+            });
+
+            string username = Request.Cookies["username"];
+            if (string.IsNullOrEmpty(username))
+            {
+                return new JsonResult(new { success = false, message = "Username was not found in cookies." });
+            }
+
+            string query = @"select USERNAME, PERMISSIONS, POWERUNIT,
+                            COMPANYKEY01, COMPANYKEY02, COMPANYKEY03, COMPANYKEY04, COMPANYKEY05,
+                            MODULE01, MODULE02, MODULE03, MODULE04, MODULE05, MODULE06, MODULE07, MODULE08, MODULE09, MODULE10
+                            from dbo.USERS where USERNAME COLLATE SQL_Latin1_General_CP1_CS_AS = @USERNAME;";
+
+            DataTable table = new DataTable();
+            string sqlDatasource = connString;
+            SqlDataReader myReader;
+
+            User user = null;
+
+            await using (SqlConnection myCon = new SqlConnection(sqlDatasource))
+            {
+                myCon.Open();
+                using (SqlCommand myCommand = new SqlCommand(query, myCon))
+                {
+                    myCommand.Parameters.AddWithValue("@USERNAME", username);
+
+                    myReader = myCommand.ExecuteReader();
+                    table.Load(myReader);
+                    myReader.Close();
+                    myCon.Close();
+                }
+            }
+            if (table.Rows.Count > 0)
+            {
+                var row = table.Rows[0];
+
+                // initialize user values...
+                user = new User
+                {
+                    Username = row["USERNAME"] != DBNull.Value ? row["USERNAME"].ToString() : null,
+                    Permissions = row["PERMISSIONS"] != DBNull.Value ? row["PERMISSIONS"].ToString() : null,
+                    Powerunit = row["POWERUNIT"] != DBNull.Value ? row["POWERUNIT"].ToString() : null,
+                    ActiveCompany = row["COMPANYKEY01"] != DBNull.Value ? row["COMPANYKEY01"].ToString() : null,
+                    Companies = new List<string>(),
+                    Modules = new List<string>(),
+                };
+
+                // populate COMPANY + MODULE arrays...
+                string companyKey;
+                string moduleKey;
+                for (int i = 1; i <= 10; i++)
+                {
+                    if (i <= 5)
+                    {
+                        companyKey = "COMPANYKEY" + i.ToString("D2");
+                        if (row[companyKey] != DBNull.Value)
+                        {
+                            user.Companies.Add(row[companyKey].ToString());
+                        }
+                    }
+
+                    moduleKey = "MODULE" + i.ToString("D2");
+                    if (row[moduleKey] != DBNull.Value)
+                    {
+                        user.Modules.Add(row[moduleKey].ToString());
+                    }
+
+                };
+
+                // generate token...
+                var tokenService = new TokenService(_configuration);
+                (string accessToken, string refreshToken) = tokenService.GenerateToken(username);
+
+                //var isHttps = Request.IsHttps;
+
+                var cookieOptions = new CookieOptions
+                {
+                    HttpOnly = true, // Makes it inaccessible to JavaScript
+                    Secure = true, // Ensures the cookie is only sent over HTTPS
+                    SameSite = SameSiteMode.None, // Allows sharing across subdomains
+                    Domain = ".tcsservices.com", // Cookie available for all subdomains of domain.com
+                    Expires = DateTimeOffset.UtcNow.AddMinutes(15), // Set expiry for access token (e.g., 15 minutes)
+                    Path = "/"
+                };
+
+                Response.Cookies.Append("access_token", accessToken, cookieOptions);
+                Response.Cookies.Append("username", user.Username, cookieOptions);
+                Response.Cookies.Append("company", user.ActiveCompany, cookieOptions);
+
+                cookieOptions.Expires = DateTimeOffset.UtcNow.AddDays(1);
+                Response.Cookies.Append("refresh_token", refreshToken, cookieOptions);
+
+                /*
+                Response.Cookies.Append("user", user.Username, cookieOptions);
+                Response.Cookies.Append("powerunit", user.Powerunit, cookieOptions);
+                Response.Cookies.Append("company", user.ActiveCompany, cookieOptions);
+                Response.Cookies.Append("accessToken", accessToken, cookieOptions);
+                Response.Cookies.Append("refreshToken", refreshToken, cookieOptions);
+                */
+
+                return new JsonResult(new
+                {
+                    success = true,
+                    user = user,
+                    accessToken = accessToken,
+                    refreshToken = refreshToken
+                });
+            }
+            else
+            {
+                return new JsonResult(new { success = false, message = "Invalid Credentials" });
+            }
+        }
+
         /*/////////////////////////////////////////////////////////////////////////////
  
         Login(username, password)
@@ -268,7 +432,8 @@ namespace LoginPortal.Server.Controllers
                     Secure = true, // Ensures the cookie is only sent over HTTPS
                     SameSite = SameSiteMode.None, // Allows sharing across subdomains
                     Domain = ".tcsservices.com", // Cookie available for all subdomains of domain.com
-                    Expires = DateTimeOffset.UtcNow.AddMinutes(15) // Set expiry for access token (e.g., 15 minutes)
+                    Expires = DateTimeOffset.UtcNow.AddMinutes(15), // Set expiry for access token (e.g., 15 minutes)
+                    Path = "/"
                 };
 
                 Response.Cookies.Append("access_token", accessToken, cookieOptions);
@@ -311,12 +476,20 @@ namespace LoginPortal.Server.Controllers
                 HttpOnly = true,
                 Secure = true,
                 Domain = ".tcsservices.com",
+                SameSite = SameSiteMode.None,
+                Path = "/"
             };
 
             Response.Cookies.Append("access_token", "", options);
             Response.Cookies.Append("refresh_token", "", options);
             Response.Cookies.Append("username", "", options);
             Response.Cookies.Append("company", "", options);
+            Response.Cookies.Append("return", "", options);
+
+            /*foreach (var cookie in Request.Cookies) 
+            {
+                Response.Cookies.Append(cookie.Key,cookie.Value,options);
+            }*/
 
             return Ok(new { message = "Logged out successfully" });
         }
@@ -338,7 +511,8 @@ namespace LoginPortal.Server.Controllers
                     Secure = true, // Ensures the cookie is only sent over HTTPS
                     SameSite = SameSiteMode.None, // Allows sharing across subdomains
                     Domain = ".tcsservices.com", // Cookie available for all subdomains of domain.com
-                    Expires = DateTimeOffset.UtcNow.AddMinutes(15) // Set expiry for access token (e.g., 15 minutes)
+                    Expires = DateTimeOffset.UtcNow.AddMinutes(15), // Set expiry for access token (e.g., 15 minutes)
+                    Path = "/"
                 });
 
                 string query = @" select COMPANYKEY01, COMPANYKEY02, COMPANYKEY03, COMPANYKEY04, COMPANYKEY05

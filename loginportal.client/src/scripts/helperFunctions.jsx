@@ -238,12 +238,15 @@ export const COMPANIES = {
 export const MODULES = {
     ADMIN: "Administrative Portal",
     DLVYCHKOFF: "Delivery Manager",
-    WAREHOUSE: "Warehouse Scanner"
+    WAREHOUSE: "Warehouse Scanner",
+    admin: "Administrative Portal",
+    deliverymanager: "Delivery Manager",
+    warehouse: "Warehouse Scanner"
 };
 
 //export const API_URL = "http://www.tcsservices.com:40730/"
 //export const API_URL = "http://www.login.tcsservices.com:40730/"
-export const API_URL = "https://www.login.tcsservices.com/";
+export const API_URL = "https://login.tcsservices.com/";
 //export const API_URL = "https://localhost:7097/";
 
 

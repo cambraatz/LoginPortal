@@ -88,7 +88,8 @@ BASIC STRUCTURE:
 const LoginPortal = () => {
     // check delivery validity onLoad and after message state change...
     useEffect(() => {
-        cleanSlate();
+        checkCookie();
+        //cleanSlate();
     }, [])
 
     /* Site state & location processing functions... */
@@ -101,6 +102,39 @@ const LoginPortal = () => {
 
     // state 'header' to maintain collapsible header...
     const [header,setHeader] = useState("open");
+
+    async function checkCookie() {
+        const response = await fetch(API_URL + "api/Registration/PullCredentials", {
+            //body: JSON.stringify(key),
+            method: "POST",
+            headers: {
+                'Content-Type': 'application/json; charset=UTF-8'
+            },
+            credentials: "include"
+        })
+        if (!response.ok) {
+            //console.log("Cookies have been cleared successfully.");
+            console.error("Cookie access failed.");
+        }
+
+        const data = await response.json();
+        console.log(data);
+
+        if (data.success) {
+            // update state values to curr user...      
+            setUser(data.user);
+            setCompanies(data.user.Companies);
+            setModules(data.user.Modules);
+            
+            // initialize company/module selection popup...
+            setPopupMessage("Select Module");
+            setPopup("module");
+            openPopup();
+        } else {
+            console.error("Cookie access failed, response was valid.");
+            cleanSlate();
+        }        
+    }
 
     /* Page rendering helper functions... */
     async function cleanSlate() {
@@ -510,11 +544,12 @@ const LoginPortal = () => {
                 break;
         }
 
+        /* THIS IS WHERE THE LOGIN LOGIC NEEDS TO CHANGE */
         if (mod) {
-            if (mod === "DLVYCHKOFF") {
-                window.location.href = `https://www.deliverymanager.tcsservices.com/`;
-            } else if (mod === "ADMIN") {
-                window.location.href = `https://www.admin.tcsservices.com/`;
+            if (mod === "DLVYCHKOFF" || mod === "deliverymanager") {
+                window.location.href = `https://deliverymanager.tcsservices.com/`;
+            } else if (mod === "ADMIN" || mod === "admin") {
+                window.location.href = `https://admin.tcsservices.com/`;
             } else {
                 closePopup();
             }
@@ -546,14 +581,18 @@ const LoginPortal = () => {
             
         } else if (type == "module") {
             if (modules.length > 0) {
-                return modules.map((module,i) => {
-                    if (module === "") { return null; }
-                    return (
-                        <button id={"md"+(i+1)} key={module+1} type="button" onClick={pressButton}>
-                            {MODULES[module]}
-                        </button>
-                    );
-                });
+                return (
+                    <>
+                    {modules.map((module,i) => {
+                        if (module === "") { return null; }
+                        return (
+                            <button id={"md"+(i+1)} key={module+1} type="button" onClick={pressButton}>
+                                {MODULES[module]}
+                            </button>
+                        );
+                    })}
+                    </>
+                )
             } else {
                 return(
                     <div className="error_placeholder">No Modules Available</div>

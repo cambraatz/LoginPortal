@@ -21,14 +21,18 @@ builder.WebHost.ConfigureKestrel(options =>
 builder.Services.AddCors(options => {
     options.AddPolicy(name: MyAllowSpecificOrigins,
         policy => {
-            policy.WithOrigins("https://localhost:5173",
-                                "http://www.login.tcsservices.com",
+            /*policy.WithOrigins("https://localhost:5173",
+                                "https://www.login.tcsservices.com",
                                 "https://login.tcsservices.com",
                                 "www.login.tcsservices.com",
                                 "login.tcsservices.com")
                                 .AllowAnyHeader()
                                 .AllowAnyMethod()
-                                .AllowCredentials();
+                                .AllowCredentials();*/
+            policy.SetIsOriginAllowed(origin => new Uri(origin).Host.EndsWith("tcsservices.com"))
+                .AllowAnyHeader()
+                .AllowAnyMethod()
+                .AllowCredentials();
         });
 });
 
@@ -84,7 +88,15 @@ app.UseForwardedHeaders(new ForwardedHeadersOptions
     ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
 });
 
-//app.UseAuthentication();
+app.UseCookiePolicy(new CookiePolicyOptions
+{
+    MinimumSameSitePolicy = SameSiteMode.None,
+    HttpOnly = Microsoft.AspNetCore.CookiePolicy.HttpOnlyPolicy.Always,
+    Secure = CookieSecurePolicy.Always
+});
+
+
+app.UseAuthentication();
 
 // new modification to CORS package...
 //app.UseCors(MyAllowSpecificOrigins);
@@ -104,6 +116,8 @@ if (!app.Environment.IsDevelopment())
 {
     app.UseHttpsRedirection();
 }
+
+app.UseHttpsRedirection();
 
 app.UseAuthorization();
 
