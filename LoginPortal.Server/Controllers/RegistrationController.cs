@@ -10,6 +10,7 @@ using DeliveryManager.Server.Models;
 using LoginPortal.Server.Models;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.Extensions.Logging;
 using Microsoft.AspNetCore.Mvc;
 using System.Data;
 using System.Data.SqlClient;
@@ -19,6 +20,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
+using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using System.Threading.Tasks;
@@ -110,14 +112,16 @@ namespace LoginPortal.Server.Controllers
     {
         private readonly IConfiguration _configuration;
         //private readonly TokenService _tokenService;
+        private readonly ILogger<RegistrationController> _logger;
         private readonly string connString;
 
-        public RegistrationController(IConfiguration configuration, TokenService tokenService)
+        public RegistrationController(IConfiguration configuration, TokenService tokenService, ILogger<RegistrationController> logger)
         {
             _configuration = configuration;
             //_tokenService = tokenService;
             //connString = _configuration.GetConnectionString("DriverChecklistTestCon");
             connString = _configuration.GetConnectionString("DriverChecklistDBCon");
+            _logger = logger;
             //connString = _configuration.GetConnectionString("TCSWEB");
         }
 
@@ -371,9 +375,9 @@ namespace LoginPortal.Server.Controllers
 
             await using (SqlConnection myCon = new SqlConnection(sqlDatasource))
             {
-                myCon.Open();
                 using (SqlCommand myCommand = new SqlCommand(query, myCon))
                 {
+                    myCon.Open();
                     myCommand.Parameters.AddWithValue("@USERNAME", credentials.USERNAME);
                     myCommand.Parameters.AddWithValue("@PASSWORD", credentials.PASSWORD);
 
@@ -443,6 +447,12 @@ namespace LoginPortal.Server.Controllers
                 cookieOptions.Expires = DateTimeOffset.UtcNow.AddDays(1);
                 Response.Cookies.Append("refresh_token", refreshToken, cookieOptions);
 
+                //var companies = JsonSerializer.Serialize(FetchCompanies());
+                //Response.Cookies.Append("company_mapping", companies, cookieOptions);
+
+                //var modules = JsonSerializer.Serialize(FetchModules());
+                //Response.Cookies.Append("module_mapping", companies, cookieOptions);
+
                 /*
                 Response.Cookies.Append("user", user.Username, cookieOptions);
                 Response.Cookies.Append("powerunit", user.Powerunit, cookieOptions);
@@ -466,6 +476,125 @@ namespace LoginPortal.Server.Controllers
         }
 
         [HttpPost]
+        [Route("FetchMappings")]
+        public async Task<JsonResult> FetchMappings()
+        {
+            try
+            {
+                var cookieOptions = new CookieOptions
+                {
+                    HttpOnly = true, // Makes it inaccessible to JavaScript
+                    Secure = true, // Ensures the cookie is only sent over HTTPS
+                    SameSite = SameSiteMode.None, // Allows sharing across subdomains
+                    Domain = ".tcsservices.com", // Cookie available for all subdomains of domain.com
+                    Expires = DateTimeOffset.UtcNow.AddMinutes(15), // Set expiry for access token (e.g., 15 minutes)
+                    Path = "/"
+                };
+                var rawCompanies = await FetchCompanies();
+                var companies = JsonSerializer.Serialize(rawCompanies);//await FetchCompanies());
+                Response.Cookies.Append("company_mapping", companies, cookieOptions);
+
+                var rawModules = await FetchModules();
+                var modules = JsonSerializer.Serialize(rawModules);//await FetchModules());
+                Response.Cookies.Append("module_mapping", modules, cookieOptions);
+
+                return new JsonResult(new
+                {
+                    success = true,
+                    companies = companies,
+                    modules = modules,
+                    message = "Company and Module mappings have been stored in cookies."
+                });
+            } catch (Exception ex) {
+                return new JsonResult(new
+                {
+                    success = false,
+                    message = $"Company and Module mappings failed; Exception: {ex.Message}"
+                });
+            }
+        }
+
+        private async Task<Dictionary<string, string>?> FetchCompanies()
+        {
+            var companies = new Dictionary<string,string>();
+            string sqlDatasource = connString;
+
+            await using (SqlConnection myCon = new SqlConnection(sqlDatasource))
+            {
+                try
+                {
+                    await myCon.OpenAsync();
+                    using (SqlCommand myCommand = new SqlCommand("select * from dbo.COMPANY", myCon))
+                    {
+                        using (SqlDataReader myReader = myCommand.ExecuteReader())
+                        {
+                            DataTable table = new DataTable();
+                            table.Load(myReader);
+
+                            foreach (DataRow row in table.Rows)
+                            {
+                                var key = row["COMPANYKEY"].ToString();
+                                var name = row["COMPANYNAME"].ToString();
+
+                                if (!string.IsNullOrEmpty(key) && !string.IsNullOrEmpty(name))
+                                {
+                                    companies[key] = name;
+                                }
+                            }
+                        }
+                    }
+
+                    await myCon.CloseAsync();
+                    return companies;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, $"An error occurred while fetching companies; Exception: {ex.Message}");
+                    return null;
+                }
+            }
+        }
+        private async Task<Dictionary<string, string>?> FetchModules()
+        {
+            var modules = new Dictionary<string, string>();
+            string sqlDatasource = connString;
+
+            await using (SqlConnection myCon = new SqlConnection(sqlDatasource))
+            {
+                try
+                {
+                    await myCon.OpenAsync();
+                    using (SqlCommand myCommand = new SqlCommand("select * from dbo.MODULE", myCon))
+                    {
+                        using (SqlDataReader myReader = myCommand.ExecuteReader())
+                        {
+                            DataTable table = new DataTable();
+                            table.Load(myReader);
+
+                            foreach (DataRow row in table.Rows)
+                            {
+                                var key = row["MODULEURL"].ToString();
+                                var name = row["MODULENAME"].ToString();
+
+                                if (!string.IsNullOrEmpty(key) && !string.IsNullOrEmpty(name))
+                                {
+                                    modules[key] = name;
+                                }
+                            }
+                        }
+                    }
+                    await myCon.CloseAsync();
+                    return modules;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, $"An error occurred while fetching modules; Exception: {ex.Message}");
+                    return null;
+                }
+            }
+        }
+
+        [HttpPost]
         [Route("Logout")]
 
         public IActionResult Logout()
@@ -480,11 +609,16 @@ namespace LoginPortal.Server.Controllers
                 Path = "/"
             };
 
-            Response.Cookies.Append("access_token", "", options);
+            foreach (var cookie in Request.Cookies)
+            {
+                Response.Cookies.Append(cookie.Key, "", options);
+            }
+
+            /*Response.Cookies.Append("access_token", "", options);
             Response.Cookies.Append("refresh_token", "", options);
             Response.Cookies.Append("username", "", options);
             Response.Cookies.Append("company", "", options);
-            Response.Cookies.Append("return", "", options);
+            Response.Cookies.Append("return", "", options);*/
 
             /*foreach (var cookie in Request.Cookies) 
             {

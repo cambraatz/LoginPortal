@@ -132,7 +132,25 @@ const LoginPortal = () => {
             openPopup();
         } else {
             console.error("Cookie access failed, response was valid.");
-            cleanSlate();
+            await cleanSlate();
+
+            const mapping_response = await fetch(`${API_URL}api/Registration/FetchMappings`, {
+                method: "POST",
+                headers: {
+                    'Content-Type': 'application/json; charset=UTF-8'
+                }
+            })
+
+            if(mapping_response.ok) {
+                const mappings = await mapping_response.json();
+                sessionStorage.setItem("companies_map", mappings.companies);
+                console.log("companies_map: ", mappings.companies);
+                
+                sessionStorage.setItem("modules_map", mappings.modules);
+                console.log("modules_map: ", mappings.modules);                
+            } else {
+                console.error("Error setting mapping cookies.")
+            }
         }        
     }
 
@@ -335,7 +353,9 @@ const LoginPortal = () => {
             // initialize company/module selection popup...
             setPopupMessage("Select Company");
             setPopup("company");
+
             openPopup();
+            return;
         } else {
             // reset state values to null...
             setCompanies([]);
@@ -345,9 +365,8 @@ const LoginPortal = () => {
 
             // render error flag + set error styling...
             flagError("ff_login_pw", "Invalid user credentials");
-            errorStyling(["USERNAME","PASSWORD"]);
-        }
-        
+            errorStyling(["USERNAME","PASSWORD"]);   
+        }     
     };
 
     /*/////////////////////////////////////////////////////////////////
@@ -472,6 +491,10 @@ const LoginPortal = () => {
 
     async function pressButton(e) {
         let company = null;
+        console.log(`targeting e.target.id: ${e.target.id}`);
+        console.log("company options: ", companies);
+        console.log("mdules options: ", modules);
+
         switch(e.target.id){
             case "cp1":
                 company = companies[0];
@@ -494,10 +517,13 @@ const LoginPortal = () => {
         }
 
         if (company) {
+            const COMPANIES = JSON.parse(sessionStorage.getItem("companies_map") || "{}");
             setUser({...user, ActiveCompany: COMPANIES[company]});
+            //setUser({...user, ActiveCompany: COMPANIES[company]});
             const response = await fetch(API_URL + "api/Registration/SetCompany", {
                 body: JSON.stringify({ 
-                    username: credentials.USERNAME, 
+                    username: credentials.USERNAME,
+                    //company: Object.keys(CompanyKeys).find(key => CompanyKeys[key] === CompanyKeys[company])
                     company: Object.keys(COMPANIES).find(key => COMPANIES[key] === COMPANIES[company]) 
                 }),
                 method: "POST",
@@ -563,10 +589,16 @@ const LoginPortal = () => {
     const [popupMessage, setPopupMessage] = useState(null);
 
     const renderPopup = (type) => {
+        const COMPANIES = JSON.parse(sessionStorage.getItem("companies_map") || "{}");
+        const MODULES = JSON.parse(sessionStorage.getItem("modules_map") || "{}");
+
         if (type == "company") {
+            console.log(`COMPANIES: ${COMPANIES}`);
+            console.log(`companies: ${companies}`);
             if (companies.length > 0) {
                 return companies.map((company,i) => {
                     if (company === "") { return null; }
+                    console.log(`company: ${company}`);
                     return (
                         <button id={"cp"+(i+1)} key={company+1} type="button" onClick={pressButton}>
                             {COMPANIES[company]}
@@ -580,6 +612,8 @@ const LoginPortal = () => {
             }
             
         } else if (type == "module") {
+            console.log(`MODULES: ${MODULES}`);
+            console.log(`modules: ${modules}`);
             if (modules.length > 0) {
                 return (
                     <>
