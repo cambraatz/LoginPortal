@@ -1,4 +1,4 @@
-﻿namespace DeliveryManager.Server.Models
+﻿namespace LoginPortal.Server.Models
 {
     public class Company
     {

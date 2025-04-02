@@ -6,8 +6,8 @@ Update: 1/9/2025
 
 *//////////////////////////////////////////////////////////////////////////////
 
-using DeliveryManager.Server.Models;
 using LoginPortal.Server.Models;
+using LoginPortal.Server.Services;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Logging;
@@ -30,9 +30,10 @@ using Newtonsoft.Json.Linq;
 using System.Web;
 using System.Net;
 using Microsoft.AspNetCore.DataProtection.KeyManagement;
+using System.Reflection;
 
 // add utility to generate JWTs...
-public class TokenService
+/*public class TokenService
 {
     private readonly IConfiguration _configuration;
     public TokenService(IConfiguration configuration)
@@ -78,7 +79,7 @@ public class TokenService
 
         return (new JwtSecurityTokenHandler().WriteToken(accessToken), new JwtSecurityTokenHandler().WriteToken(refreshToken));
     }
-}
+}*/
 
 public class RefreshRequest
 {
@@ -108,22 +109,490 @@ namespace LoginPortal.Server.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    public class RegistrationController : ControllerBase
+    public class LoginController : ControllerBase
     {
         private readonly IConfiguration _configuration;
-        //private readonly TokenService _tokenService;
-        private readonly ILogger<RegistrationController> _logger;
-        private readonly string connString;
+        private readonly TokenService _tokenService;
+        private readonly ILogger<LoginController> _logger;
+        private readonly string? _connString;
 
-        public RegistrationController(IConfiguration configuration, TokenService tokenService, ILogger<RegistrationController> logger)
+        public LoginController(IConfiguration configuration, TokenService tokenService, ILogger<LoginController> logger)
         {
             _configuration = configuration;
-            //_tokenService = tokenService;
-            //connString = _configuration.GetConnectionString("DriverChecklistTestCon");
-            connString = _configuration.GetConnectionString("DriverChecklistDBCon");
+            _tokenService = tokenService;
+            _connString = _configuration.GetConnectionString("TCSWEB");
             _logger = logger;
-            //connString = _configuration.GetConnectionString("TCSWEB");
         }
+
+        [HttpPost]
+        [Route("PullCredentials")]
+        public async Task<JsonResult> PullCredentials()
+        {
+            bool result;
+            if (!bool.TryParse(Request.Cookies["return"], out result))
+            {
+                return new JsonResult(new { success = false, message = "Valid return boolean not found." });
+            }
+
+            Response.Cookies.Append("return", "", CookieService.RemoveOptions());
+
+            string? username = Request.Cookies["username"];
+            if (string.IsNullOrEmpty(username))
+            {
+                return new JsonResult(new { success = false, message = "Username was not found in cookies." });
+            }
+
+            string query = @"select USERNAME, PERMISSIONS, POWERUNIT,
+                            COMPANYKEY01, COMPANYKEY02, COMPANYKEY03, COMPANYKEY04, COMPANYKEY05,
+                            MODULE01, MODULE02, MODULE03, MODULE04, MODULE05, MODULE06, MODULE07, MODULE08, MODULE09, MODULE10
+                            from dbo.USERS where USERNAME COLLATE SQL_Latin1_General_CP1_CS_AS = @USERNAME;";
+
+            DataTable table = new DataTable();
+            string? sqlDatasource = _connString;
+            SqlDataReader myReader;
+
+            User? user = null;
+
+            await using (SqlConnection myCon = new SqlConnection(sqlDatasource))
+            {
+                myCon.Open();
+                using (SqlCommand myCommand = new SqlCommand(query, myCon))
+                {
+                    myCommand.Parameters.AddWithValue("@USERNAME", username);
+
+                    myReader = myCommand.ExecuteReader();
+                    table.Load(myReader);
+                    myReader.Close();
+                    myCon.Close();
+                }
+            }
+            if (table.Rows.Count > 0)
+            {
+                var row = table.Rows[0];
+
+                // initialize user values...
+                user = new User
+                {
+                    Username = row["USERNAME"] != DBNull.Value ? row["USERNAME"].ToString() : null,
+                    Permissions = row["PERMISSIONS"] != DBNull.Value ? row["PERMISSIONS"].ToString() : null,
+                    Powerunit = row["POWERUNIT"] != DBNull.Value ? row["POWERUNIT"].ToString() : null,
+                    ActiveCompany = row["COMPANYKEY01"] != DBNull.Value ? row["COMPANYKEY01"].ToString() : null,
+                    Companies = new List<string>(),
+                    Modules = new List<string>(),
+                };
+
+                // populate COMPANY + MODULE arrays...
+                string companyKey;
+                string moduleKey;
+                for (int i = 1; i <= 10; i++)
+                {
+                    if (i <= 5)
+                    {
+                        companyKey = "COMPANYKEY" + i.ToString("D2");
+                        if (row[companyKey] != DBNull.Value || row[companyKey] != null)
+                        {
+                            user.Companies.Add(row[companyKey].ToString());
+                        }
+                    }
+
+                    moduleKey = "MODULE" + i.ToString("D2");
+                    if (row[moduleKey] != DBNull.Value)
+                    {
+                        user.Modules.Add(row[moduleKey].ToString());
+                    }
+
+                };
+
+                // generate token...
+                var tokenService = new TokenService(_configuration);
+                (string accessToken, string refreshToken) = tokenService.GenerateToken(username);
+                Response.Cookies.Append("access_token", accessToken, CookieService.AccessOptions());
+                Response.Cookies.Append("refresh_token", refreshToken, CookieService.RemoveOptions());
+
+                Response.Cookies.Append("username", user.Username, CookieService.AccessOptions());
+                Response.Cookies.Append("company", user.ActiveCompany, CookieService.AccessOptions());
+                
+
+                return new JsonResult(new
+                {
+                    success = true,
+                    user = user,
+                    accessToken = accessToken,
+                    refreshToken = refreshToken
+                });
+            }
+            else
+            {
+                return new JsonResult(new { success = false, message = "Invalid Credentials" });
+            }
+        }
+
+        [HttpPost]
+        [Route("Logout")]
+
+        public IActionResult Logout()
+        {
+            foreach (var cookie in Request.Cookies)
+            {
+                Response.Cookies.Append(cookie.Key, "", CookieService.RemoveOptions());
+            }
+
+            return Ok(new { message = "Logged out successfully" });
+        }
+
+        private async Task<Dictionary<string, string>?> FetchCompanies()
+        {
+            var companies = new Dictionary<string, string>();
+            string sqlDatasource = _connString;
+
+            await using (SqlConnection myCon = new SqlConnection(sqlDatasource))
+            {
+                try
+                {
+                    await myCon.OpenAsync();
+                    using (SqlCommand myCommand = new SqlCommand("select * from dbo.COMPANY", myCon))
+                    {
+                        using (SqlDataReader myReader = myCommand.ExecuteReader())
+                        {
+                            DataTable table = new DataTable();
+                            table.Load(myReader);
+
+                            foreach (DataRow row in table.Rows)
+                            {
+                                var key = row["COMPANYKEY"].ToString();
+                                var name = row["COMPANYNAME"].ToString();
+
+                                if (!string.IsNullOrEmpty(key) && !string.IsNullOrEmpty(name))
+                                {
+                                    companies[key] = name;
+                                }
+                            }
+                        }
+                    }
+
+                    await myCon.CloseAsync();
+                    return companies;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, $"An error occurred while fetching companies; Exception: {ex.Message}");
+                    return null;
+                }
+            }
+        }
+        private async Task<Dictionary<string, string>?> FetchModules()
+        {
+            var modules = new Dictionary<string, string>();
+            string sqlDatasource = _connString;
+
+            await using (SqlConnection myCon = new SqlConnection(sqlDatasource))
+            {
+                try
+                {
+                    await myCon.OpenAsync();
+                    using (SqlCommand myCommand = new SqlCommand("select * from dbo.MODULE", myCon))
+                    {
+                        using (SqlDataReader myReader = myCommand.ExecuteReader())
+                        {
+                            DataTable table = new DataTable();
+                            table.Load(myReader);
+
+                            foreach (DataRow row in table.Rows)
+                            {
+                                var key = row["MODULEURL"].ToString();
+                                var name = row["MODULENAME"].ToString();
+
+                                if (!string.IsNullOrEmpty(key) && !string.IsNullOrEmpty(name))
+                                {
+                                    modules[key] = name;
+                                }
+                            }
+                        }
+                    }
+                    await myCon.CloseAsync();
+                    return modules;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, $"An error occurred while fetching modules; Exception: {ex.Message}");
+                    return null;
+                }
+            }
+        }
+
+        private async Task<string?> _fetchMappings(string dbTable)
+        {
+            var dict = new Dictionary<string, string>();
+            string sqlDatasource = _connString;
+
+            await using (SqlConnection myCon = new SqlConnection(sqlDatasource))
+            {
+                try
+                {
+                    await myCon.OpenAsync();
+                    using (SqlCommand myCommand = new SqlCommand($"select * from dbo.{dbTable}", myCon))
+                    {
+                        using (SqlDataReader myReader = myCommand.ExecuteReader())
+                        {
+                            DataTable table = new DataTable();
+                            table.Load(myReader);
+
+                            string keyColumn = (dbTable == "COMPANY") ? "COMPANYKEY" : "MODULEURL";
+                            string valColumn = (dbTable == "COMPANY") ? "COMPANYNAME" : "MODULENAME";
+
+                            foreach (DataRow row in table.Rows)
+                            {
+                                string? key = row[keyColumn].ToString();
+                                string? value = row[valColumn].ToString();
+
+                                if (!string.IsNullOrEmpty(key) && !string.IsNullOrEmpty(value))
+                                {
+                                    dict[key] = value;
+                                }
+                            }
+                        }
+                    }
+                    await myCon.CloseAsync();
+                    return JsonSerializer.Serialize(dict);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, $"An error occurred while fetching {dbTable} mappings; Exception: {ex.Message}");
+                    return null;
+                }
+            }
+        }
+
+        [HttpPost]
+        [Route("FetchMappings")]
+        public async Task<JsonResult> FetchMappings()
+        {
+            try
+            {
+                //var rawCompanies = await FetchCompanies();
+                //var companies = JsonSerializer.Serialize(rawCompanies);
+                string companies = await _fetchMappings("COMPANY");
+                Response.Cookies.Append("company_mapping", companies, CookieService.AccessOptions());
+
+                //var rawModules = await FetchModules();
+                //var modules = JsonSerializer.Serialize(rawModules);
+                string modules = await _fetchMappings("MODULE");
+                Response.Cookies.Append("module_mapping", modules, CookieService.AccessOptions());
+
+                return new JsonResult(new
+                {
+                    success = true,
+                    companies = companies,
+                    modules = modules,
+                    message = "Company and Module mappings have been stored in cookies."
+                });
+            }
+            catch (Exception ex)
+            {
+                return new JsonResult(new
+                {
+                    success = false,
+                    message = $"Company and Module mappings failed; Exception: {ex.Message}"
+                });
+            }
+        }
+
+        /*/////////////////////////////////////////////////////////////////////////////
+ 
+        Login(username, password)
+
+        Handles both driver and administrator login credentials, sending the former to
+        the standard application flow and the latter to the admin portal.
+
+        Queries the USERS database table for any users matching the provided username 
+        and password combination provided by the user. On successful query, declare the
+        task (ie: admin/driver) and return the powerunit on record when logging into a
+        valid driver account.
+
+        *//////////////////////////////////////////////////////////////////////////////
+
+        [HttpPost]
+        [Route("Login")]
+        public async Task<JsonResult> Login([FromBody] loginCredentials credentials)
+        {
+            string query = @" select USERNAME, PERMISSIONS, POWERUNIT,
+                            COMPANYKEY01, COMPANYKEY02, COMPANYKEY03, COMPANYKEY04, COMPANYKEY05,
+                            MODULE01, MODULE02, MODULE03, MODULE04, MODULE05, MODULE06, MODULE07, MODULE08, MODULE09, MODULE10
+                            from dbo.USERS where USERNAME COLLATE SQL_Latin1_General_CP1_CS_AS = @USERNAME
+                            and PASSWORD COLLATE SQL_Latin1_General_CP1_CS_AS = @PASSWORD";
+
+            DataTable table = new DataTable();
+            string sqlDatasource = _connString;
+            SqlDataReader myReader;
+
+            await using (SqlConnection myCon = new SqlConnection(sqlDatasource))
+            {
+                using (SqlCommand myCommand = new SqlCommand(query, myCon))
+                {
+                    myCon.Open();
+                    myCommand.Parameters.AddWithValue("@USERNAME", credentials.USERNAME);
+                    myCommand.Parameters.AddWithValue("@PASSWORD", credentials.PASSWORD);
+
+                    myReader = myCommand.ExecuteReader();
+                    table.Load(myReader);
+                    myReader.Close();
+                    myCon.Close();
+                }
+            }
+
+            if (table.Rows.Count > 0)
+            {
+                var row = table.Rows[0];
+
+                // initialize user values...
+                User user = new User
+                {
+                    Username = row["USERNAME"] != DBNull.Value ? row["USERNAME"].ToString() : null,
+                    Permissions = row["PERMISSIONS"] != DBNull.Value ? row["PERMISSIONS"].ToString() : null,
+                    Powerunit = row["POWERUNIT"] != DBNull.Value ? row["POWERUNIT"].ToString() : null,
+                    ActiveCompany = row["COMPANYKEY01"] != DBNull.Value ? row["COMPANYKEY01"].ToString() : null,
+                    Companies = new List<string>(),
+                    Modules = new List<string>(),
+                };
+
+                // populate COMPANY + MODULE arrays...
+                string companyKey;
+                string moduleKey;
+                for (int i = 1; i <= 10; i++)
+                {
+                    if (i <= 5)
+                    {
+                        companyKey = "COMPANYKEY" + i.ToString("D2");
+                        if (row[companyKey] != DBNull.Value)
+                        {
+                            user.Companies.Add(row[companyKey].ToString());
+                        }
+                    }
+
+                    moduleKey = "MODULE" + i.ToString("D2");
+                    if (row[moduleKey] != DBNull.Value)
+                    {
+                        user.Modules.Add(row[moduleKey].ToString());
+                    }
+
+                };
+
+                // generate token...
+                var tokenService = new TokenService(_configuration);
+                (string accessToken, string refreshToken) = tokenService.GenerateToken(credentials.USERNAME);
+
+                /*Response.Cookies.Append("access_token", accessToken, CookieService.accessOptions);
+                Response.Cookies.Append("username", user.Username, CookieService.accessOptions);
+                Response.Cookies.Append("company", user.ActiveCompany, CookieService.accessOptions);
+                Response.Cookies.Append("refresh_token", refreshToken, CookieService.removeOptions);
+                var tokenService = new TokenService(_configuration);
+                (bool success, string message) = tokenService.AuthorizeRequest(HttpContext);*/
+
+                Response.Cookies.Append("access_token", accessToken, CookieService.AccessOptions());
+                Response.Cookies.Append("refresh_token", refreshToken, CookieService.RefreshOptions());
+                Response.Cookies.Append("username", user.Username, CookieService.AccessOptions());
+                Response.Cookies.Append("company", user.ActiveCompany, CookieService.AccessOptions());
+
+                return new JsonResult(new
+                {
+                    success = true,
+                    user = user,
+                    //accessToken = accessToken,
+                    //refreshToken = refreshToken
+                });
+            }
+            else
+            {
+                return new JsonResult(new { success = false, message = "Invalid Credentials" });
+            }
+        }
+
+        public class SetCompanyRequest
+        {
+            public string Username { get; set; }
+            public string Company { get; set; }
+        }
+
+        [HttpPost]
+        [Route("SetCompany")]
+        public async Task<JsonResult> SetCompany([FromBody] SetCompanyRequest request)
+        {
+            try
+            {
+                Response.Cookies.Append("company", request.Company, CookieService.AccessOptions());
+
+                string query = @"select COMPANYKEY01, COMPANYKEY02, COMPANYKEY03, COMPANYKEY04, COMPANYKEY05
+                            from dbo.USERS where USERNAME COLLATE SQL_Latin1_General_CP1_CS_AS = @USERNAME";
+
+                DataTable table = new DataTable();
+                string sqlDatasource = _connString;
+                SqlDataReader myReader;
+
+                await using (SqlConnection myCon = new SqlConnection(sqlDatasource))
+                {
+                    myCon.Open();
+                    using (SqlCommand myCommand = new SqlCommand(query, myCon))
+                    {
+                        myCommand.Parameters.AddWithValue("@USERNAME", request.Username);
+
+                        myReader = myCommand.ExecuteReader();
+                        table.Load(myReader);
+                        myReader.Close();
+                    }
+
+                    if (table.Rows.Count > 0)
+                    {
+                        DataRow row = table.Rows[0];
+                        List<string> companies = new List<string>
+                        {
+                            row["COMPANYKEY01"]?.ToString(),
+                            row["COMPANYKEY02"]?.ToString(),
+                            row["COMPANYKEY03"]?.ToString(),
+                            row["COMPANYKEY04"]?.ToString(),
+                            row["COMPANYKEY05"]?.ToString()
+                        };
+
+                        int index = companies.IndexOf(request.Company);
+
+                        if (index > 0)
+                        {
+                            string swapColumn = $"COMPANYKEY0{index + 1}";
+                            string prevCompany = companies[0];
+
+                            (companies[0], companies[index]) = (companies[index], companies[0]);
+
+                            string updateQuery = $@" update dbo.USERS set COMPANYKEY01 = @NewCompany01, {swapColumn} = @NewCompanyOther
+                                                where USERNAME COLLATE SQL_Latin1_General_CP1_CS_AS = @USERNAME";
+
+                            using (SqlCommand myCommand = new SqlCommand(updateQuery, myCon))
+                            {
+                                myCommand.Parameters.AddWithValue("NewCompany01", companies[0]);
+                                myCommand.Parameters.AddWithValue("NewCompanyOther", companies[index]);
+                                myCommand.Parameters.AddWithValue("@USERNAME", request.Username);
+
+                                myCommand.ExecuteNonQuery();
+                            }
+
+                            return new JsonResult(new { success = true, company = request.Company, message = "New company was placed into active slot (ie: index 0)." });
+                        }
+                        else
+                        {
+                            return new JsonResult(new { success = true, company = request.Company, message = "Existing company remains in active slot (ie: index 0)." });
+                        }
+                    }
+                    else
+                    {
+                        return new JsonResult(new { success = false, message = "No companies were found associated to the current user." });
+                    }
+                }                
+            }
+            catch (Exception ex)
+            {
+                return new JsonResult(new { success = false, message = "Cookie not found:" + ex });
+            }
+        }
+
+        /* *** *** FUNCTIONS BELOW THIS LINE HAVE NOT YET BEEN SEEN IN REDEVELOPMENT *** *** */
 
         [HttpPost]
         [Route("RefreshToken")]
@@ -209,513 +678,6 @@ namespace LoginPortal.Server.Controllers
             return new JsonResult(new { success = true, user = username, message = "Valid return boolean cookie found." });
         }
 
-        // INACTIVE?????????
-        [HttpPost]
-        [Route("PullCredentials")]
-        public async Task<JsonResult> PullCredentials()
-        {
-            bool result;
-            if (!bool.TryParse(Request.Cookies["return"], out result))
-            {
-                return new JsonResult(new { success = false, message = "Valid return boolean not found." });
-            }
-
-            Response.Cookies.Append("return", "", new CookieOptions
-            {
-                HttpOnly = true, // Makes it inaccessible to JavaScript
-                Secure = true, // Ensures the cookie is only sent over HTTPS
-                SameSite = SameSiteMode.None, // Allows sharing across subdomains
-                Domain = ".tcsservices.com", // Cookie available for all subdomains of domain.com
-                Expires = DateTimeOffset.UtcNow.AddDays(-1), // Set expiry for access token (e.g., 15 minutes)
-                Path = "/"
-            });
-
-            string username = Request.Cookies["username"];
-            if (string.IsNullOrEmpty(username))
-            {
-                return new JsonResult(new { success = false, message = "Username was not found in cookies." });
-            }
-
-            string query = @"select USERNAME, PERMISSIONS, POWERUNIT,
-                            COMPANYKEY01, COMPANYKEY02, COMPANYKEY03, COMPANYKEY04, COMPANYKEY05,
-                            MODULE01, MODULE02, MODULE03, MODULE04, MODULE05, MODULE06, MODULE07, MODULE08, MODULE09, MODULE10
-                            from dbo.USERS where USERNAME COLLATE SQL_Latin1_General_CP1_CS_AS = @USERNAME;";
-
-            DataTable table = new DataTable();
-            string sqlDatasource = connString;
-            SqlDataReader myReader;
-
-            User user = null;
-
-            await using (SqlConnection myCon = new SqlConnection(sqlDatasource))
-            {
-                myCon.Open();
-                using (SqlCommand myCommand = new SqlCommand(query, myCon))
-                {
-                    myCommand.Parameters.AddWithValue("@USERNAME", username);
-
-                    myReader = myCommand.ExecuteReader();
-                    table.Load(myReader);
-                    myReader.Close();
-                    myCon.Close();
-                }
-            }
-            if (table.Rows.Count > 0)
-            {
-                var row = table.Rows[0];
-
-                // initialize user values...
-                user = new User
-                {
-                    Username = row["USERNAME"] != DBNull.Value ? row["USERNAME"].ToString() : null,
-                    Permissions = row["PERMISSIONS"] != DBNull.Value ? row["PERMISSIONS"].ToString() : null,
-                    Powerunit = row["POWERUNIT"] != DBNull.Value ? row["POWERUNIT"].ToString() : null,
-                    ActiveCompany = row["COMPANYKEY01"] != DBNull.Value ? row["COMPANYKEY01"].ToString() : null,
-                    Companies = new List<string>(),
-                    Modules = new List<string>(),
-                };
-
-                // populate COMPANY + MODULE arrays...
-                string companyKey;
-                string moduleKey;
-                for (int i = 1; i <= 10; i++)
-                {
-                    if (i <= 5)
-                    {
-                        companyKey = "COMPANYKEY" + i.ToString("D2");
-                        if (row[companyKey] != DBNull.Value)
-                        {
-                            user.Companies.Add(row[companyKey].ToString());
-                        }
-                    }
-
-                    moduleKey = "MODULE" + i.ToString("D2");
-                    if (row[moduleKey] != DBNull.Value)
-                    {
-                        user.Modules.Add(row[moduleKey].ToString());
-                    }
-
-                };
-
-                // generate token...
-                var tokenService = new TokenService(_configuration);
-                (string accessToken, string refreshToken) = tokenService.GenerateToken(username);
-
-                //var isHttps = Request.IsHttps;
-
-                var cookieOptions = new CookieOptions
-                {
-                    HttpOnly = true, // Makes it inaccessible to JavaScript
-                    Secure = true, // Ensures the cookie is only sent over HTTPS
-                    SameSite = SameSiteMode.None, // Allows sharing across subdomains
-                    Domain = ".tcsservices.com", // Cookie available for all subdomains of domain.com
-                    Expires = DateTimeOffset.UtcNow.AddMinutes(15), // Set expiry for access token (e.g., 15 minutes)
-                    Path = "/"
-                };
-
-                Response.Cookies.Append("access_token", accessToken, cookieOptions);
-                Response.Cookies.Append("username", user.Username, cookieOptions);
-                Response.Cookies.Append("company", user.ActiveCompany, cookieOptions);
-
-                cookieOptions.Expires = DateTimeOffset.UtcNow.AddDays(1);
-                Response.Cookies.Append("refresh_token", refreshToken, cookieOptions);
-
-                /*
-                Response.Cookies.Append("user", user.Username, cookieOptions);
-                Response.Cookies.Append("powerunit", user.Powerunit, cookieOptions);
-                Response.Cookies.Append("company", user.ActiveCompany, cookieOptions);
-                Response.Cookies.Append("accessToken", accessToken, cookieOptions);
-                Response.Cookies.Append("refreshToken", refreshToken, cookieOptions);
-                */
-
-                return new JsonResult(new
-                {
-                    success = true,
-                    user = user,
-                    accessToken = accessToken,
-                    refreshToken = refreshToken
-                });
-            }
-            else
-            {
-                return new JsonResult(new { success = false, message = "Invalid Credentials" });
-            }
-        }
-
-        /*/////////////////////////////////////////////////////////////////////////////
- 
-        Login(username, password)
-
-        Handles both driver and administrator login credentials, sending the former to
-        the standard application flow and the latter to the admin portal.
-
-        Queries the USERS database table for any users matching the provided username 
-        and password combination provided by the user. On successful query, declare the
-        task (ie: admin/driver) and return the powerunit on record when logging into a
-        valid driver account.
-
-        *//////////////////////////////////////////////////////////////////////////////
-
-        [HttpPost]
-        [Route("Login")]
-        public async Task<JsonResult> Login([FromBody] loginCredentials credentials)
-        {
-            //string query = "select * from dbo.USERS where USERNAME COLLATE SQL_Latin1_General_CP1_CS_AS = @USERNAME and PASSWORD COLLATE SQL_Latin1_General_CP1_CS_AS = @PASSWORD";
-            string query = @" select USERNAME, PERMISSIONS, POWERUNIT,
-                            COMPANYKEY01, COMPANYKEY02, COMPANYKEY03, COMPANYKEY04, COMPANYKEY05,
-                            MODULE01, MODULE02, MODULE03, MODULE04, MODULE05, MODULE06, MODULE07, MODULE08, MODULE09, MODULE10
-                            from dbo.USERS where USERNAME COLLATE SQL_Latin1_General_CP1_CS_AS = @USERNAME
-                            and PASSWORD COLLATE SQL_Latin1_General_CP1_CS_AS = @PASSWORD";
-
-            DataTable table = new DataTable();
-            string sqlDatasource = connString;
-            SqlDataReader myReader;
-
-            User user = null;
-
-            await using (SqlConnection myCon = new SqlConnection(sqlDatasource))
-            {
-                using (SqlCommand myCommand = new SqlCommand(query, myCon))
-                {
-                    myCon.Open();
-                    myCommand.Parameters.AddWithValue("@USERNAME", credentials.USERNAME);
-                    myCommand.Parameters.AddWithValue("@PASSWORD", credentials.PASSWORD);
-
-                    myReader = myCommand.ExecuteReader();
-                    table.Load(myReader);
-                    myReader.Close();
-                    myCon.Close();
-                }
-            }
-            if (table.Rows.Count > 0)
-            {
-                var row = table.Rows[0];
-
-                // initialize user values...
-                user = new User
-                {
-                    Username = row["USERNAME"] != DBNull.Value ? row["USERNAME"].ToString() : null,
-                    Permissions = row["PERMISSIONS"] != DBNull.Value ? row["PERMISSIONS"].ToString() : null,
-                    Powerunit = row["POWERUNIT"] != DBNull.Value ? row["POWERUNIT"].ToString() : null,
-                    ActiveCompany = row["COMPANYKEY01"] != DBNull.Value ? row["COMPANYKEY01"].ToString() : null,
-                    Companies = new List<string>(),
-                    Modules = new List<string>(),
-                };
-
-                // populate COMPANY + MODULE arrays...
-                string companyKey;
-                string moduleKey;
-                for (int i = 1; i <= 10; i++)
-                {
-                    if (i <= 5)
-                    {
-                        companyKey = "COMPANYKEY" + i.ToString("D2");
-                        if (row[companyKey] != DBNull.Value)
-                        {
-                            user.Companies.Add(row[companyKey].ToString());
-                        }
-                    }
-
-                    moduleKey = "MODULE" + i.ToString("D2");
-                    if (row[moduleKey] != DBNull.Value)
-                    {
-                        user.Modules.Add(row[moduleKey].ToString());
-                    }
-                        
-                };
-
-                // generate token...
-                var tokenService = new TokenService(_configuration);
-                (string accessToken, string refreshToken) = tokenService.GenerateToken(credentials.USERNAME);
-
-                //var isHttps = Request.IsHttps;
-
-                var cookieOptions = new CookieOptions
-                {
-                    HttpOnly = true, // Makes it inaccessible to JavaScript
-                    Secure = true, // Ensures the cookie is only sent over HTTPS
-                    SameSite = SameSiteMode.None, // Allows sharing across subdomains
-                    Domain = ".tcsservices.com", // Cookie available for all subdomains of domain.com
-                    Expires = DateTimeOffset.UtcNow.AddMinutes(15), // Set expiry for access token (e.g., 15 minutes)
-                    Path = "/"
-                };
-
-                Response.Cookies.Append("access_token", accessToken, cookieOptions);
-                Response.Cookies.Append("username", user.Username, cookieOptions);
-                Response.Cookies.Append("company", user.ActiveCompany, cookieOptions);
-
-                cookieOptions.Expires = DateTimeOffset.UtcNow.AddDays(1);
-                Response.Cookies.Append("refresh_token", refreshToken, cookieOptions);
-
-                //var companies = JsonSerializer.Serialize(FetchCompanies());
-                //Response.Cookies.Append("company_mapping", companies, cookieOptions);
-
-                //var modules = JsonSerializer.Serialize(FetchModules());
-                //Response.Cookies.Append("module_mapping", companies, cookieOptions);
-
-                /*
-                Response.Cookies.Append("user", user.Username, cookieOptions);
-                Response.Cookies.Append("powerunit", user.Powerunit, cookieOptions);
-                Response.Cookies.Append("company", user.ActiveCompany, cookieOptions);
-                Response.Cookies.Append("accessToken", accessToken, cookieOptions);
-                Response.Cookies.Append("refreshToken", refreshToken, cookieOptions);
-                */
-
-                return new JsonResult(new 
-                { 
-                    success = true,
-                    user = user,
-                    accessToken = accessToken,
-                    refreshToken = refreshToken 
-                });
-            }
-            else
-            {
-                return new JsonResult(new { success = false, message = "Invalid Credentials" });
-            }
-        }
-
-        [HttpPost]
-        [Route("FetchMappings")]
-        public async Task<JsonResult> FetchMappings()
-        {
-            try
-            {
-                var cookieOptions = new CookieOptions
-                {
-                    HttpOnly = true, // Makes it inaccessible to JavaScript
-                    Secure = true, // Ensures the cookie is only sent over HTTPS
-                    SameSite = SameSiteMode.None, // Allows sharing across subdomains
-                    Domain = ".tcsservices.com", // Cookie available for all subdomains of domain.com
-                    Expires = DateTimeOffset.UtcNow.AddMinutes(15), // Set expiry for access token (e.g., 15 minutes)
-                    Path = "/"
-                };
-                var rawCompanies = await FetchCompanies();
-                var companies = JsonSerializer.Serialize(rawCompanies);//await FetchCompanies());
-                Response.Cookies.Append("company_mapping", companies, cookieOptions);
-
-                var rawModules = await FetchModules();
-                var modules = JsonSerializer.Serialize(rawModules);//await FetchModules());
-                Response.Cookies.Append("module_mapping", modules, cookieOptions);
-
-                return new JsonResult(new
-                {
-                    success = true,
-                    companies = companies,
-                    modules = modules,
-                    message = "Company and Module mappings have been stored in cookies."
-                });
-            } catch (Exception ex) {
-                return new JsonResult(new
-                {
-                    success = false,
-                    message = $"Company and Module mappings failed; Exception: {ex.Message}"
-                });
-            }
-        }
-
-        private async Task<Dictionary<string, string>?> FetchCompanies()
-        {
-            var companies = new Dictionary<string,string>();
-            string sqlDatasource = connString;
-
-            await using (SqlConnection myCon = new SqlConnection(sqlDatasource))
-            {
-                try
-                {
-                    await myCon.OpenAsync();
-                    using (SqlCommand myCommand = new SqlCommand("select * from dbo.COMPANY", myCon))
-                    {
-                        using (SqlDataReader myReader = myCommand.ExecuteReader())
-                        {
-                            DataTable table = new DataTable();
-                            table.Load(myReader);
-
-                            foreach (DataRow row in table.Rows)
-                            {
-                                var key = row["COMPANYKEY"].ToString();
-                                var name = row["COMPANYNAME"].ToString();
-
-                                if (!string.IsNullOrEmpty(key) && !string.IsNullOrEmpty(name))
-                                {
-                                    companies[key] = name;
-                                }
-                            }
-                        }
-                    }
-
-                    await myCon.CloseAsync();
-                    return companies;
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, $"An error occurred while fetching companies; Exception: {ex.Message}");
-                    return null;
-                }
-            }
-        }
-        private async Task<Dictionary<string, string>?> FetchModules()
-        {
-            var modules = new Dictionary<string, string>();
-            string sqlDatasource = connString;
-
-            await using (SqlConnection myCon = new SqlConnection(sqlDatasource))
-            {
-                try
-                {
-                    await myCon.OpenAsync();
-                    using (SqlCommand myCommand = new SqlCommand("select * from dbo.MODULE", myCon))
-                    {
-                        using (SqlDataReader myReader = myCommand.ExecuteReader())
-                        {
-                            DataTable table = new DataTable();
-                            table.Load(myReader);
-
-                            foreach (DataRow row in table.Rows)
-                            {
-                                var key = row["MODULEURL"].ToString();
-                                var name = row["MODULENAME"].ToString();
-
-                                if (!string.IsNullOrEmpty(key) && !string.IsNullOrEmpty(name))
-                                {
-                                    modules[key] = name;
-                                }
-                            }
-                        }
-                    }
-                    await myCon.CloseAsync();
-                    return modules;
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, $"An error occurred while fetching modules; Exception: {ex.Message}");
-                    return null;
-                }
-            }
-        }
-
-        [HttpPost]
-        [Route("Logout")]
-
-        public IActionResult Logout()
-        {
-            CookieOptions options = new CookieOptions
-            {
-                Expires = DateTime.UtcNow.AddDays(-1),
-                HttpOnly = true,
-                Secure = true,
-                Domain = ".tcsservices.com",
-                SameSite = SameSiteMode.None,
-                Path = "/"
-            };
-
-            foreach (var cookie in Request.Cookies)
-            {
-                Response.Cookies.Append(cookie.Key, "", options);
-            }
-
-            /*Response.Cookies.Append("access_token", "", options);
-            Response.Cookies.Append("refresh_token", "", options);
-            Response.Cookies.Append("username", "", options);
-            Response.Cookies.Append("company", "", options);
-            Response.Cookies.Append("return", "", options);*/
-
-            /*foreach (var cookie in Request.Cookies) 
-            {
-                Response.Cookies.Append(cookie.Key,cookie.Value,options);
-            }*/
-
-            return Ok(new { message = "Logged out successfully" });
-        }
-        public class SetCompanyRequest
-        {
-            public string Username { get; set; }
-            public string Company { get; set; }
-        }
-
-        [HttpPost]
-        [Route("SetCompany")]
-        public async Task<JsonResult> SetCompany([FromBody] SetCompanyRequest request)
-        {
-            try
-            {
-                Response.Cookies.Append("company", request.Company, new CookieOptions
-                {
-                    HttpOnly = true, // Makes it inaccessible to JavaScript
-                    Secure = true, // Ensures the cookie is only sent over HTTPS
-                    SameSite = SameSiteMode.None, // Allows sharing across subdomains
-                    Domain = ".tcsservices.com", // Cookie available for all subdomains of domain.com
-                    Expires = DateTimeOffset.UtcNow.AddMinutes(15), // Set expiry for access token (e.g., 15 minutes)
-                    Path = "/"
-                });
-
-                string query = @" select COMPANYKEY01, COMPANYKEY02, COMPANYKEY03, COMPANYKEY04, COMPANYKEY05
-                            from dbo.USERS where USERNAME COLLATE SQL_Latin1_General_CP1_CS_AS = @USERNAME";
-
-                DataTable table = new DataTable();
-                string sqlDatasource = connString;
-                SqlDataReader myReader;
-
-                await using (SqlConnection myCon = new SqlConnection(sqlDatasource))
-                {
-                    myCon.Open();
-                    using (SqlCommand myCommand = new SqlCommand(query, myCon))
-                    {
-                        myCommand.Parameters.AddWithValue("@USERNAME", request.Username);
-
-                        myReader = myCommand.ExecuteReader();
-                        table.Load(myReader);
-                        myReader.Close();
-                    }
-
-                    if (table.Rows.Count > 0)
-                    {
-                        DataRow row = table.Rows[0];
-                        List<string> companies = new List<string>
-                        {
-                            row["COMPANYKEY01"]?.ToString(),
-                            row["COMPANYKEY02"]?.ToString(),
-                            row["COMPANYKEY03"]?.ToString(),
-                            row["COMPANYKEY04"]?.ToString(),
-                            row["COMPANYKEY05"]?.ToString()
-                        };
-
-                        int index = companies.IndexOf(request.Company);
-
-                        if (index > 0)
-                        {
-                            string swapColumn = $"COMPANYKEY0{index + 1}";
-                            string prevCompany = companies[0];
-
-                            (companies[0], companies[index]) = (companies[index], companies[0]);
-
-                            string updateQuery = $@" update dbo.USERS set COMPANYKEY01 = @NewCompany01, {swapColumn} = @NewCompanyOther
-                                                where USERNAME COLLATE SQL_Latin1_General_CP1_CS_AS = @USERNAME";
-
-                            using (SqlCommand myCommand = new SqlCommand(updateQuery, myCon))
-                            {
-                                myCommand.Parameters.AddWithValue("NewCompany01", companies[0]);
-                                myCommand.Parameters.AddWithValue("NewCompanyOther", companies[index]);
-                                myCommand.Parameters.AddWithValue("@USERNAME", request.Username);
-
-                                myCommand.ExecuteNonQuery();
-                            }
-                        }
-                    }
-                }
-                var contents = Request.Cookies["company"];
-                if (contents != null && contents == request.Company)
-                {
-                    return new JsonResult(new { success = true, company = contents });
-                }
-                return new JsonResult(new { success = false, message = "Cookie did not update" });
-            }
-            catch (Exception ex)
-            {
-                return new JsonResult(new { success = false, message = "Cookie not found:" + ex });
-            }
-        }
-
         [HttpGet]
         [Route("GetCompanies")]
         [Authorize]
@@ -724,7 +686,7 @@ namespace LoginPortal.Server.Controllers
             //string query = "SELECT COMPANYKEY01, COMPANYKEY02, COMPANYKEY03, COMPANYKEY04, COMPANYKEY05 FROM dbo.USERS WHERE USERNAME = @USERNAME";
             string query = "SELECT * FROM dbo.COMPANY";
 
-            string sqlDatasource = connString;
+            string sqlDatasource = _connString;
             List<Company> companies = new List<Company>();
 
             await using (SqlConnection myCon = new SqlConnection(sqlDatasource))
@@ -783,7 +745,7 @@ namespace LoginPortal.Server.Controllers
             string selectquery = "select * from dbo.DMFSTDAT where MFSTDATE=@MFSTDATE and POWERUNIT=@POWERUNIT";
 
             DataTable table = new DataTable();
-            string sqlDatasource = connString;
+            string sqlDatasource = _connString;
             SqlDataReader myReader;
 
             await using (SqlConnection myCon = new SqlConnection(sqlDatasource))
@@ -849,7 +811,7 @@ namespace LoginPortal.Server.Controllers
             string query = "select * from dbo.USERS";
 
             DataTable table = new DataTable();
-            string sqlDatasource = connString;
+            string sqlDatasource = _connString;
             SqlDataReader myReader;
 
             using (SqlConnection myCon = new SqlConnection(sqlDatasource))
@@ -876,7 +838,7 @@ namespace LoginPortal.Server.Controllers
             string query = "update dbo.USERS set USERNAME=@USERNAME, PASSWORD=@PASSWORD, POWERUNIT=@POWERUNIT where USERNAME=@USERNAME";
 
             DataTable table = new DataTable();
-            string sqlDatasource = connString;
+            string sqlDatasource = _connString;
             SqlDataReader myReader;
 
             await using (SqlConnection myCon = new SqlConnection(sqlDatasource))
@@ -906,7 +868,7 @@ namespace LoginPortal.Server.Controllers
             string selectQuery = "SELECT * FROM dbo.USERS";
 
             DataTable table = new DataTable();
-            string sqlDatasource = connString;
+            string sqlDatasource = _connString;
 
             await using (SqlConnection myCon = new SqlConnection(sqlDatasource))
             {
@@ -963,7 +925,7 @@ namespace LoginPortal.Server.Controllers
             string selectQuery = "SELECT * FROM dbo.USERS";
 
             DataTable table = new DataTable();
-            string sqlDatasource = connString;
+            string sqlDatasource = _connString;
 
             await using (SqlConnection myCon = new SqlConnection(sqlDatasource))
             {
@@ -1030,7 +992,7 @@ namespace LoginPortal.Server.Controllers
             string updateQuery = "UPDATE dbo.USERS SET PASSWORD=@PASSWORD, POWERUNIT=@POWERUNIT WHERE USERNAME=@USERNAME";
 
             DataTable table = new DataTable();
-            string sqlDatasource = connString;
+            string sqlDatasource = _connString;
 
             await using (SqlConnection myCon = new SqlConnection(sqlDatasource))
             {
@@ -1079,7 +1041,7 @@ namespace LoginPortal.Server.Controllers
             string selectQuery = "SELECT * FROM dbo.USERS";
 
             DataTable table = new DataTable();
-            string sqlDatasource = connString;
+            string sqlDatasource = _connString;
             SqlDataReader myReader;
 
             using (SqlConnection myCon = new SqlConnection(sqlDatasource))
@@ -1125,7 +1087,7 @@ namespace LoginPortal.Server.Controllers
             string query = "SELECT USERNAME, PASSWORD, POWERUNIT FROM dbo.USERS WHERE USERNAME = @USERNAME";
 
             DataTable table = new DataTable();
-            string sqlDatasource = connString;
+            string sqlDatasource = _connString;
             driverCredentials driver = new driverCredentials();
 
             await using (SqlConnection myCon = new SqlConnection(sqlDatasource))
@@ -1193,7 +1155,7 @@ namespace LoginPortal.Server.Controllers
         {
             string query = "SELECT * FROM dbo.COMPANY where COMPANYKEY=@COMPANYKEY";
 
-            string sqlDatasource = connString;
+            string sqlDatasource = _connString;
 
             await using (SqlConnection myCon = new SqlConnection(sqlDatasource))
             {
@@ -1229,7 +1191,7 @@ namespace LoginPortal.Server.Controllers
         }
 
         // ADMIN FUNCTION...
-        [HttpPut]
+        /*[HttpPut]
         [Route("SetCompany")]
         [Authorize]
         public async Task<JsonResult> SetCompany([FromBody] string COMPANYNAME)
@@ -1238,7 +1200,7 @@ namespace LoginPortal.Server.Controllers
             string insertQuery = "insert into dbo.COMPANY (COMPANYKEY, COMPANYNAME) values (@COMPANYKEY, @COMPANYNAME)";
 
             DataTable table = new DataTable();
-            string sqlDatasource = connString;
+            string sqlDatasource = _connString;
 
             await using (SqlConnection myCon = new SqlConnection(sqlDatasource))
             {
@@ -1280,6 +1242,6 @@ namespace LoginPortal.Server.Controllers
                     return new JsonResult("Error: " + ex.Message);
                 }
             }
-        }
+        }*/
     }
 }

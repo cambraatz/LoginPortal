@@ -10,9 +10,7 @@ import { useState, useEffect } from 'react';
 import Header from './Header';
 import Footer from './Footer';
 import { 
-    API_URL, 
-    COMPANIES,
-    MODULES,
+    API_URL,
     resetStyling,
     flagError,
     errorStyling} from '../scripts/helperFunctions';
@@ -86,40 +84,36 @@ BASIC STRUCTURE:
 *//////////////////////////////////////////////////////////////////////
 
 const LoginPortal = () => {
-    // check delivery validity onLoad and after message state change...
+    // check for valid auth tokens from previous session...
     useEffect(() => {
-        checkCookie();
-        //cleanSlate();
+        pullCredentials();
     }, [])
 
     /* Site state & location processing functions... */
 
-    // state 'driverCredentials' to be passed to next page...
+    // driver credentials to manage input form...
     const [credentials, setCredentials] = useState({
         USERNAME: '',
         PASSWORD: ''
     })
 
-    // state 'header' to maintain collapsible header...
+    // header toggle status for collapsible header...
     const [header,setHeader] = useState("open");
 
-    async function checkCookie() {
-        const response = await fetch(API_URL + "api/Registration/PullCredentials", {
-            //body: JSON.stringify(key),
+    async function pullCredentials() {
+        // fetch 
+        const response = await fetch(API_URL + "api/Login/PullCredentials", {
             method: "POST",
             headers: {
                 'Content-Type': 'application/json; charset=UTF-8'
             },
-            credentials: "include"
-        })
-        if (!response.ok) {
-            //console.log("Cookies have been cleared successfully.");
+            credentials: "include",
+        }); if(!response.ok) {
             console.error("Cookie access failed.");
         }
 
         const data = await response.json();
-        console.log(data);
-
+        //console.log(data);
         if (data.success) {
             // update state values to curr user...      
             setUser(data.user);
@@ -134,7 +128,7 @@ const LoginPortal = () => {
             console.error("Cookie access failed, response was valid.");
             await cleanSlate();
 
-            const mapping_response = await fetch(`${API_URL}api/Registration/FetchMappings`, {
+            const mapping_response = await fetch(`${API_URL}api/Login/FetchMappings`, {
                 method: "POST",
                 headers: {
                     'Content-Type': 'application/json; charset=UTF-8'
@@ -159,7 +153,7 @@ const LoginPortal = () => {
         localStorage.clear();
         sessionStorage.clear();
 
-        const response = await fetch(API_URL + "api/Registration/Logout", {
+        const response = await fetch(API_URL + "api/Login/Logout", {
             method: "POST",
             headers: {
                 'Content-Type': 'application/json; charset=UTF-8'
@@ -333,7 +327,7 @@ const LoginPortal = () => {
             return;
         }
 
-        const response = await fetch(API_URL + "api/Registration/Login", {
+        const response = await fetch(API_URL + "api/Login/Login", {
             body: JSON.stringify(credentials),
             method: "POST",
             headers: {
@@ -519,31 +513,28 @@ const LoginPortal = () => {
         if (company) {
             const COMPANIES = JSON.parse(sessionStorage.getItem("companies_map") || "{}");
             setUser({...user, ActiveCompany: COMPANIES[company]});
-            //setUser({...user, ActiveCompany: COMPANIES[company]});
-            const response = await fetch(API_URL + "api/Registration/SetCompany", {
+
+            // select company to work under...
+            const response = await fetch(API_URL + "api/Login/SetCompany", {
                 body: JSON.stringify({ 
                     username: credentials.USERNAME,
-                    //company: Object.keys(CompanyKeys).find(key => CompanyKeys[key] === CompanyKeys[company])
                     company: Object.keys(COMPANIES).find(key => COMPANIES[key] === COMPANIES[company]) 
                 }),
                 method: "POST",
                 headers: {
                     'Content-Type': 'application/json; charset=UTF-8'
                 }
-            });
-
-            if (!response.ok) {
+            }); if (!response.ok) {
                 console.alert("Company selection failed");
             }
-            //const data = await response.json();
-            //console.log("data: ", data);
 
+            // initialize popup for module selection, RETURN...
             setPopupMessage("Select Module");
             setPopup("module");
-            //console.log(modules);
             return;
         }
 
+        // match clicked module and assign to mod...
         let mod = null;
         switch(e.target.id){
             case "md1":
@@ -570,12 +561,11 @@ const LoginPortal = () => {
                 break;
         }
 
-        /* THIS IS WHERE THE LOGIN LOGIC NEEDS TO CHANGE */
+        // navigates to selected module using MODULEURL...
         if (mod) {
-            if (mod === "DLVYCHKOFF" || mod === "deliverymanager") {
-                window.location.href = `https://deliverymanager.tcsservices.com/`;
-            } else if (mod === "ADMIN" || mod === "admin") {
-                window.location.href = `https://admin.tcsservices.com/`;
+            console.log(`mod: ${mod}`);
+            if (mod === "deliverymanager" || mod === "admin") {
+                window.location.href = `https://${mod}.tcsservices.com/`;
             } else {
                 closePopup();
             }
@@ -593,8 +583,6 @@ const LoginPortal = () => {
         const MODULES = JSON.parse(sessionStorage.getItem("modules_map") || "{}");
 
         if (type == "company") {
-            console.log(`COMPANIES: ${COMPANIES}`);
-            console.log(`companies: ${companies}`);
             if (companies.length > 0) {
                 return companies.map((company,i) => {
                     if (company === "") { return null; }
@@ -612,8 +600,6 @@ const LoginPortal = () => {
             }
             
         } else if (type == "module") {
-            console.log(`MODULES: ${MODULES}`);
-            console.log(`modules: ${modules}`);
             if (modules.length > 0) {
                 return (
                     <>
@@ -657,7 +643,7 @@ const LoginPortal = () => {
     return(
         <div id="webpage">
             <Header 
-                company="Transportation Computer Support, LLC."
+                company="Transportation Computer Support, LLC"
                 title="Login Portal"
                 alt="Enter your login credentials"
                 status="Off"

@@ -1,3 +1,5 @@
+using LoginPortal.Server.Services;
+
 using Newtonsoft.Json.Serialization;
 using Microsoft.AspNetCore.HttpOverrides;
 
@@ -76,17 +78,7 @@ builder.Services.AddScoped<TokenService>();
 
 var app = builder.Build();
 
-//builder.WebHost.UseUrls("http://*:80");
-
-// Enable CORS (not suggested during production)
-//app.UseCors(c => c.AllowAnyHeader().AllowAnyOrigin().AllowAnyMethod());
 app.UseRouting();
-app.UseCors(MyAllowSpecificOrigins);
-
-app.UseForwardedHeaders(new ForwardedHeadersOptions
-{
-    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
-});
 
 app.UseCookiePolicy(new CookiePolicyOptions
 {
@@ -95,13 +87,15 @@ app.UseCookiePolicy(new CookiePolicyOptions
     Secure = CookieSecurePolicy.Always
 });
 
-
 app.UseAuthentication();
+app.UseAuthorization();
 
-// new modification to CORS package...
-//app.UseCors(MyAllowSpecificOrigins);
+app.UseCors(MyAllowSpecificOrigins);
 
-// End of updated attempts...
+app.UseForwardedHeaders(new ForwardedHeadersOptions
+{
+    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
+});
 
 app.UseDefaultFiles();
 app.UseStaticFiles();
@@ -112,17 +106,8 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI();
 }
-if (!app.Environment.IsDevelopment())
-{
-    app.UseHttpsRedirection();
-}
-
-app.UseHttpsRedirection();
-
-app.UseAuthorization();
 
 app.MapControllers();
-
 app.MapFallbackToFile("/index.html");
 
 app.Run();

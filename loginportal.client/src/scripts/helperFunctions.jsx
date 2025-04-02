@@ -56,7 +56,7 @@ export async function refreshToken(username) {
         RefreshToken: refreshToken
     }
 
-    const response = await fetch(API_URL + "api/Registration/RefreshToken",
+    const response = await fetch(API_URL + "api/Login/RefreshToken",
         {
             body: JSON.stringify(body_data),
             method: "POST",
@@ -108,7 +108,7 @@ export const isCompanyValid = () => {
 }
 
 export async function getCompany_DB() {
-    const response = await fetch(API_URL + "api/Registration/GetCompany?COMPANYKEY=c01", {
+    const response = await fetch(API_URL + "api/Login/GetCompany?COMPANYKEY=c01", {
         method: "GET",
     })
 
