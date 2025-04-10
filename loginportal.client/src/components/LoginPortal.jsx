@@ -13,7 +13,9 @@ import {
     API_URL,
     resetStyling,
     flagError,
-    errorStyling} from '../scripts/helperFunctions';
+    errorStyling,
+    showFailFlag
+} from '../scripts/helperFunctions';
 
 /*/////////////////////////////////////////////////////////////////////
 
@@ -84,7 +86,7 @@ BASIC STRUCTURE:
 *//////////////////////////////////////////////////////////////////////
 
 const LoginPortal = () => {
-    // check for valid auth tokens from previous session...
+    // validate user; uses stored creds otherwise clear cookies...
     useEffect(() => {
         pullCredentials();
     }, [])
@@ -100,8 +102,9 @@ const LoginPortal = () => {
     // header toggle status for collapsible header...
     const [header,setHeader] = useState("open");
 
+    // leverage cookies to fetch current user credentials...
     async function pullCredentials() {
-        // fetch 
+        // fetch credentials
         const response = await fetch(API_URL + "api/Login/PullCredentials", {
             method: "POST",
             headers: {
@@ -114,6 +117,8 @@ const LoginPortal = () => {
 
         const data = await response.json();
         //console.log(data);
+
+        //
         if (data.success) {
             // update state values to curr user...      
             setUser(data.user);
@@ -125,26 +130,9 @@ const LoginPortal = () => {
             setPopup("module");
             openPopup();
         } else {
-            console.error("Cookie access failed, response was valid.");
+            // incomplete cookies, clean slate and start fresh...
+            console.log("Cookie access failed, response was valid.");
             await cleanSlate();
-
-            const mapping_response = await fetch(`${API_URL}api/Login/FetchMappings`, {
-                method: "POST",
-                headers: {
-                    'Content-Type': 'application/json; charset=UTF-8'
-                }
-            })
-
-            if(mapping_response.ok) {
-                const mappings = await mapping_response.json();
-                sessionStorage.setItem("companies_map", mappings.companies);
-                console.log("companies_map: ", mappings.companies);
-                
-                sessionStorage.setItem("modules_map", mappings.modules);
-                console.log("modules_map: ", mappings.modules);                
-            } else {
-                console.error("Error setting mapping cookies.")
-            }
         }        
     }
 
@@ -162,6 +150,28 @@ const LoginPortal = () => {
         if (!response.ok) {
             //console.log("Cookies have been cleared successfully.");
             console.alert("Cookie removal failed, Logout failure.");
+        } else {
+            fetchMappings();
+        }
+    }
+
+    async function fetchMappings() {
+        const mapping_response = await fetch(`${API_URL}api/Login/FetchMappings`, {
+            method: "POST",
+            headers: {
+                'Content-Type': 'application/json; charset=UTF-8'
+            }
+        })
+
+        if(mapping_response.ok) {
+            const mappings = await mapping_response.json();
+            sessionStorage.setItem("companies_map", mappings.companies);
+            console.log("companies_map: ", mappings.companies);
+            
+            sessionStorage.setItem("modules_map", mappings.modules);
+            console.log("modules_map: ", mappings.modules);                
+        } else {
+            console.error("Error setting mapping cookies.");
         }
     }
 
@@ -423,16 +433,16 @@ const LoginPortal = () => {
     }
     *//////////////////////////////////////////////////////////////////
 
-    async function submitNewUser(e) {
+    async function newUserChange(e) {
         e.preventDefault();
 
         // handle new user menu button clicks...
         switch(e.target.parentElement.id){
             case "set_password":
-                //pullDriver();
+                pullDriver();
                 break;
             case "submit_user":
-                //updateDriver();
+                updateDriver();
                 break;
             case "cancel_user":
                 closePopup();
@@ -442,15 +452,139 @@ const LoginPortal = () => {
         }
     }
 
+        /*/////////////////////////////////////////////////////////////////
+    // collect password + powerunit to initialize new driver credentials...
+    [void] : updateDriver() {
+        handle input field error styling
+        package driver credentials
+        update new user in DB to have valid credentials
+        verify and render success status
+    }
+    *//////////////////////////////////////////////////////////////////
+
+    async function updateDriver() {
+        // target password and powerunit fields...
+        const pass_field = document.getElementById("password");
+        const pow_field = document.getElementById("powerunit");
+
+        // map empty field cases to messages...
+        let code = -1; // case -1...
+        let elementID;
+        const alerts = {
+            0: "Password is required!", // case 0...
+            1: "Powerunit is required!", // case 1...
+            2: "Password and Powerunit are required!" // case 2...
+        }
+
+        // flag empty password and powerunit fields...
+        if(!(pass_field.value)) {
+            pass_field.classList.add("invalid_input");
+            elementID = "ff_admin_enu_pw";
+            code += 1;
+        }
+        if (!(pow_field.value)) {
+            pow_field.classList.add("invalid_input");
+            elementID = "ff_admin_enu_pu";
+            code += 2;
+        }
+
+         // catch and alert user to incomplete fields...
+        if (code >= 0) {
+            showFailFlag(elementID, alerts[code]);
+            return;
+        }
+
+        // package credentials and attempt updating records...
+        const body_data = {
+            USERNAME: credentials.USERNAME,
+            PASSWORD: credentials.PASSWORD,
+            POWERUNIT: credentials.POWERUNIT // this is the field that may change...
+        }
+        const response = await fetch(API_URL + "api/Login/InitializeDriver", {
+            body: JSON.stringify(body_data),
+            method: "PUT",
+            headers: {
+                'Content-Type': 'application/json; charset=UTF-8'
+            },
+            credentials: 'include'
+        })
+
+        const data = await response.json();
+        //console.log(data);
+
+        // signal update status on screen...
+        if (data.success) {
+            setPopup("Update Success");
+            setTimeout(() => {
+                closePopup();
+            },1000)
+        } else {
+            setPopup("Fail");
+            setTimeout(() => {
+                closePopup();
+            },1000)
+        }        
+    }
+
+    async function pullDriver() {
+        // handle and signal empty username field...
+        if (credentials.USERNAME == "") {
+            //document.getElementById("username").className = "invalid_input";
+            document.getElementById("username").classList.add("invalid_input");
+            showFailFlag("ff_login_nu", "Username is required!");
+            return;
+        }
+
+        // package credentials and admin status and attempt driver query...
+        const body_data = {
+            USERNAME: credentials.USERNAME,
+            PASSWORD: null,
+            POWERUNIT: null
+        }
+        const response = await fetch(API_URL + "api/Login/PullDriver", {
+            body: JSON.stringify(body_data),
+            method: "POST",
+            headers: {
+                'Content-Type': 'application/json; charset=UTF-8'
+            },
+            credentials: 'include'
+        });
+        
+        const data = await response.json()
+        //console.log(data);
+
+        // catch failed request and prevent behavior...
+        if (!data.success) {
+            //document.getElementById("username").className = "invalid_input";
+            document.getElementById("username").classList.add("invalid_input");
+            showFailFlag("ff_login_nu", "Username not found!");
+        }
+        else {
+            // if password exists, fail out...
+            if (data.password){
+                document.getElementById("username").classList.add("invalid_input");
+                showFailFlag("ff_login_nu", "Username already exists!");
+            } else {
+                // initialize new user fields and open popup to collect password...
+                setCredentials({
+                    USERNAME: data.username,
+                    PASSWORD: "",
+                    POWERUNIT: data.powerunit
+                })
+                setPopup("edit_new_user");
+            }
+        }
+    }
+
     /*/////////////////////////////////////////////////////////////////
     // handle updates to new user credentials...
-    [void] : updateNewUser(e) {
+    [void] : newUserChange(e) {
         clear error styling (if present)
         handle change for new user credentials
     }
     *//////////////////////////////////////////////////////////////////
 
-    async function updateNewUser(e) {
+    async function newUsernameChange(e) {
         if (document.getElementById(e.target.id).classList.contains("invalid_input")){
             // reset styling to default...
             document.getElementById("username").classList.remove("invalid_input");
@@ -575,6 +709,59 @@ const LoginPortal = () => {
         closePopup();
     }
 
+    /*/////////////////////////////////////////////////////////////////
+    // handle updates to new user credentials...
+    [void] : editNewUser(e) {
+        clear error styling (if present)
+        handle change for new user credentials
+    }
+    *//////////////////////////////////////////////////////////////////
+
+    async function handleNewUserChange(e) {
+        //if (document.getElementById(e.target.id).className == "invalid_input"){
+        if (document.getElementById(e.target.id).classList.contains("invalid_input")){
+            //document.getElementById("username").className = "";
+            //document.getElementById("password").className = "";
+            //document.getElementById("powerunit").className = "";
+
+            // reset styling to default...
+            document.getElementById("username").classList.remove("invalid_input");
+
+            // skip password + powerunit when username specific...
+            if (document.getElementById("password")){
+                document.getElementById("password").classList.remove("invalid_input");
+            }
+            if (document.getElementById("powerunit")){
+                document.getElementById("powerunit").classList.remove("invalid_input");
+            }
+        }
+
+        // update credentials state on change...
+        let val = e.target.value;
+        switch(e.target.id){
+            case 'username':
+                setCredentials({
+                    ...credentials,
+                    USERNAME: val
+                });
+                break;
+            case 'password':
+                setCredentials({
+                    ...credentials,
+                    PASSWORD: val
+                });
+                break;
+            case 'powerunit':
+                setCredentials({
+                    ...credentials,
+                    POWERUNIT: val
+                });
+                break;
+            default:
+                break;
+        }
+    }
+
     const [popup, setPopup] = useState("company");
     const [popupMessage, setPopupMessage] = useState(null);
 
@@ -623,17 +810,49 @@ const LoginPortal = () => {
                 <>
                     <div className="input_wrapper">
                         <label>Username</label>
-                        <input type="text" id="username" value={credentials.USERNAME ? credentials.USERNAME : ""} className="input_form" onChange={updateNewUser}/>
+                        <input type="text" id="username" value={credentials.USERNAME ? credentials.USERNAME : ""} className="input_form" onChange={newUsernameChange}/>
                         <div className="fail_flag" id="ff_login_nu">
                             <p>Username was not found!</p>
                         </div>
                     </div>
                     <div id="set_password">
-                        <button id="set_password" className="popup_button" onClick={submitNewUser}>Authorize</button>
+                        <button id="set_password" className="popup_button" onClick={newUserChange}>Set Password</button>
                     </div>
                     <div id="cancel_user">
                         <button className="popup_button" onClick={cancelDriver}>Cancel</button>
                     </div>
+                </>
+            );
+        } else if (type == "edit_new_user") {
+            return (
+                <>
+                <div className="input_wrapper">
+                    <label>Username</label>
+                    <input type="text" id="username" value={credentials.USERNAME ? credentials.USERNAME : ""} className="input_form" onChange={newUsernameChange} disabled/>
+                    <div className="fail_flag" id="ff_login_nu">
+                        <p>Username was not found!</p>
+                    </div>
+                </div>
+                <div className="input_wrapper">
+                    <label>Password</label>
+                    <input type="text" id="password" value={credentials.PASSWORD} className="input_form" onChange={handleNewUserChange} required/>
+                    <div className="fail_flag" id="ff_admin_enu_pw">
+                        <p>Password is required!</p>
+                    </div>
+                </div>
+                <div className="input_wrapper">
+                    <label>Power Unit</label>
+                    <input type="text" id="powerunit" value={credentials.POWERUNIT} className="input_form" onChange={handleNewUserChange} required/>
+                    <div className="fail_flag" id="ff_admin_enu_pu">
+                        <p>Powerunit is required!</p>
+                    </div>
+                </div>
+                <div id="submit_user">
+                    <button className="popup_button" onClick={updateDriver}>Update User</button>
+                </div>
+                <div id="cancel_user">
+                    <button type="button" className="popup_button" onClick={cancelDriver}>Cancel</button>
+                </div>
                 </>
             );
         }

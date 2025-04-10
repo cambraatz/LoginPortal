@@ -2,7 +2,7 @@
  
 Author: Cameron Braatz
 Date: 11/15/2024
-Update: 1/9/2025
+Update: 4/8/2025
 
 *//////////////////////////////////////////////////////////////////////////////
 
@@ -31,67 +31,7 @@ using System.Web;
 using System.Net;
 using Microsoft.AspNetCore.DataProtection.KeyManagement;
 using System.Reflection;
-
-// add utility to generate JWTs...
-/*public class TokenService
-{
-    private readonly IConfiguration _configuration;
-    public TokenService(IConfiguration configuration)
-    {
-        _configuration = configuration;
-    }
-    public (string AccessToken, string RefreshToken) GenerateToken(string username, string company=null)
-    {
-        var accessClaims = new List<Claim>
-        {
-            new Claim(ClaimTypes.Name, username),
-            new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
-        };
-
-        // add company if present...
-        if (!string.IsNullOrEmpty(company))
-        {
-            accessClaims.Add(new Claim("Company", company));
-        }
-
-        var refreshClaims = new List<Claim>
-        {
-            new Claim(ClaimTypes.Name, username),
-            new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
-        };
-
-        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["Jwt:Key"]));
-        var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
-
-        var accessToken = new JwtSecurityToken(
-            issuer: _configuration["Jwt:Issuer"],
-            audience: _configuration["Jwt:Audience"],
-            claims: accessClaims,
-            expires: DateTime.UtcNow.AddMinutes(15),
-            signingCredentials: creds);
-
-        var refreshToken = new JwtSecurityToken(
-            issuer: _configuration["Jwt:Issuer"],
-            audience: _configuration["Jwt:Audience"],
-            claims: refreshClaims,
-            expires: DateTime.UtcNow.AddDays(1),
-            signingCredentials: creds);
-
-        return (new JwtSecurityTokenHandler().WriteToken(accessToken), new JwtSecurityTokenHandler().WriteToken(refreshToken));
-    }
-}*/
-
-public class RefreshRequest
-{
-    public string Username { get; set; }
-    public string RefreshToken { get; set; }
-}
-
-public class CompanyRequest
-{
-    public string Company { get; set; }
-    public string AccessToken { get; set; }
-}
+using System.Linq.Expressions;
 
 /*/////////////////////////////////////////////////////////////////////////////
  
@@ -124,227 +64,158 @@ namespace LoginPortal.Server.Controllers
             _logger = logger;
         }
 
+        // fetch full user credentials to auto-login when return cookie is found...
         [HttpPost]
         [Route("PullCredentials")]
         public async Task<JsonResult> PullCredentials()
         {
+            // check for result and clear if found...
             bool result;
             if (!bool.TryParse(Request.Cookies["return"], out result))
             {
                 return new JsonResult(new { success = false, message = "Valid return boolean not found." });
             }
-
             Response.Cookies.Append("return", "", CookieService.RemoveOptions());
 
+            // check for username if present...
             string? username = Request.Cookies["username"];
             if (string.IsNullOrEmpty(username))
             {
                 return new JsonResult(new { success = false, message = "Username was not found in cookies." });
             }
 
+            // SQL query...
             string query = @"select USERNAME, PERMISSIONS, POWERUNIT,
                             COMPANYKEY01, COMPANYKEY02, COMPANYKEY03, COMPANYKEY04, COMPANYKEY05,
                             MODULE01, MODULE02, MODULE03, MODULE04, MODULE05, MODULE06, MODULE07, MODULE08, MODULE09, MODULE10
                             from dbo.USERS where USERNAME COLLATE SQL_Latin1_General_CP1_CS_AS = @USERNAME;";
 
+            // SQL utilities...
             DataTable table = new DataTable();
             string? sqlDatasource = _connString;
             SqlDataReader myReader;
 
-            User? user = null;
-
+            // SQL query...
             await using (SqlConnection myCon = new SqlConnection(sqlDatasource))
             {
-                myCon.Open();
+                await myCon.OpenAsync();
                 using (SqlCommand myCommand = new SqlCommand(query, myCon))
                 {
+                    // query database...
                     myCommand.Parameters.AddWithValue("@USERNAME", username);
+                    myReader = await myCommand.ExecuteReaderAsync();
 
-                    myReader = myCommand.ExecuteReader();
-                    table.Load(myReader);
-                    myReader.Close();
-                    myCon.Close();
-                }
-            }
-            if (table.Rows.Count > 0)
-            {
-                var row = table.Rows[0];
-
-                // initialize user values...
-                user = new User
-                {
-                    Username = row["USERNAME"] != DBNull.Value ? row["USERNAME"].ToString() : null,
-                    Permissions = row["PERMISSIONS"] != DBNull.Value ? row["PERMISSIONS"].ToString() : null,
-                    Powerunit = row["POWERUNIT"] != DBNull.Value ? row["POWERUNIT"].ToString() : null,
-                    ActiveCompany = row["COMPANYKEY01"] != DBNull.Value ? row["COMPANYKEY01"].ToString() : null,
-                    Companies = new List<string>(),
-                    Modules = new List<string>(),
-                };
-
-                // populate COMPANY + MODULE arrays...
-                string companyKey;
-                string moduleKey;
-                for (int i = 1; i <= 10; i++)
-                {
-                    if (i <= 5)
+                    if (await myReader.ReadAsync())
                     {
-                        companyKey = "COMPANYKEY" + i.ToString("D2");
-                        if (row[companyKey] != DBNull.Value || row[companyKey] != null)
+                        // initialize user values...
+                        User user = new User
                         {
-                            user.Companies.Add(row[companyKey].ToString());
-                        }
-                    }
+                            Username = myReader["USERNAME"] != DBNull.Value ? myReader["USERNAME"].ToString() : null,
+                            Permissions = myReader["PERMISSIONS"] != DBNull.Value ? myReader["PERMISSIONS"].ToString() : null,
+                            Powerunit = myReader["POWERUNIT"] != DBNull.Value ? myReader["POWERUNIT"].ToString() : null,
+                            ActiveCompany = myReader["COMPANYKEY01"] != DBNull.Value ? myReader["COMPANYKEY01"].ToString() : null,
+                            Companies = new List<string>(),
+                            Modules = new List<string>(),
+                        };
 
-                    moduleKey = "MODULE" + i.ToString("D2");
-                    if (row[moduleKey] != DBNull.Value)
+                        // initialize company and modules arrays...
+                        string companyKey;
+                        string moduleKey;
+                        for (int i = 1; i <= 10; i++)
+                        {
+                            if (i <= 5)
+                            {
+                                companyKey = "COMPANYKEY" + i.ToString("D2");
+                                if (myReader[companyKey] != DBNull.Value || myReader[companyKey] != null)
+                                {
+                                    user.Companies.Add(myReader[companyKey].ToString());
+                                }
+                            }
+
+                            moduleKey = "MODULE" + i.ToString("D2");
+                            if (myReader[moduleKey] != DBNull.Value)
+                            {
+                                user.Modules.Add(myReader[moduleKey].ToString());
+                            }
+
+                        };
+
+                        // generate token...
+                        var tokenService = new TokenService(_configuration);
+                        (string accessToken, string refreshToken) = tokenService.GenerateToken(username);
+
+                        // cache app data in cookies...
+                        Response.Cookies.Append("access_token", accessToken, CookieService.AccessOptions());
+                        Response.Cookies.Append("refresh_token", refreshToken, CookieService.RefreshOptions());
+                        Response.Cookies.Append("username", user.Username, CookieService.AccessOptions());
+                        Response.Cookies.Append("company", user.ActiveCompany, CookieService.AccessOptions());
+
+                        return new JsonResult(new
+                        {
+                            success = true,
+                            user = user
+                        });
+                    }
+                    else
                     {
-                        user.Modules.Add(row[moduleKey].ToString());
+                        return new JsonResult(new { success = false, message = "Invalid Credentials" });
                     }
-
-                };
-
-                // generate token...
-                var tokenService = new TokenService(_configuration);
-                (string accessToken, string refreshToken) = tokenService.GenerateToken(username);
-                Response.Cookies.Append("access_token", accessToken, CookieService.AccessOptions());
-                Response.Cookies.Append("refresh_token", refreshToken, CookieService.RemoveOptions());
-
-                Response.Cookies.Append("username", user.Username, CookieService.AccessOptions());
-                Response.Cookies.Append("company", user.ActiveCompany, CookieService.AccessOptions());
-                
-
-                return new JsonResult(new
-                {
-                    success = true,
-                    user = user,
-                    accessToken = accessToken,
-                    refreshToken = refreshToken
-                });
-            }
-            else
-            {
-                return new JsonResult(new { success = false, message = "Invalid Credentials" });
+                }
             }
         }
 
+        // expiring/removing all cookies on logout...
         [HttpPost]
         [Route("Logout")]
-
         public IActionResult Logout()
         {
             foreach (var cookie in Request.Cookies)
             {
                 Response.Cookies.Append(cookie.Key, "", CookieService.RemoveOptions());
             }
-
             return Ok(new { message = "Logged out successfully" });
         }
 
-        private async Task<Dictionary<string, string>?> FetchCompanies()
+        /*/////////////////////////////////////////////////////////////////////////////
+ 
+        FetchMappings()
+
+        Utilized helper function to query/dump contents of dbo.COMPANY and dbo.MODULES,
+        to be used in mapping short-hand keys (passed throughout sesssions) and their 
+        verbose equivalents for rendering.
+
+        *//////////////////////////////////////////////////////////////////////////////
+        private async Task<string> _fetchMappings(string dbTable)
         {
-            var companies = new Dictionary<string, string>();
-            string sqlDatasource = _connString;
-
-            await using (SqlConnection myCon = new SqlConnection(sqlDatasource))
-            {
-                try
-                {
-                    await myCon.OpenAsync();
-                    using (SqlCommand myCommand = new SqlCommand("select * from dbo.COMPANY", myCon))
-                    {
-                        using (SqlDataReader myReader = myCommand.ExecuteReader())
-                        {
-                            DataTable table = new DataTable();
-                            table.Load(myReader);
-
-                            foreach (DataRow row in table.Rows)
-                            {
-                                var key = row["COMPANYKEY"].ToString();
-                                var name = row["COMPANYNAME"].ToString();
-
-                                if (!string.IsNullOrEmpty(key) && !string.IsNullOrEmpty(name))
-                                {
-                                    companies[key] = name;
-                                }
-                            }
-                        }
-                    }
-
-                    await myCon.CloseAsync();
-                    return companies;
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, $"An error occurred while fetching companies; Exception: {ex.Message}");
-                    return null;
-                }
-            }
-        }
-        private async Task<Dictionary<string, string>?> FetchModules()
-        {
-            var modules = new Dictionary<string, string>();
-            string sqlDatasource = _connString;
-
-            await using (SqlConnection myCon = new SqlConnection(sqlDatasource))
-            {
-                try
-                {
-                    await myCon.OpenAsync();
-                    using (SqlCommand myCommand = new SqlCommand("select * from dbo.MODULE", myCon))
-                    {
-                        using (SqlDataReader myReader = myCommand.ExecuteReader())
-                        {
-                            DataTable table = new DataTable();
-                            table.Load(myReader);
-
-                            foreach (DataRow row in table.Rows)
-                            {
-                                var key = row["MODULEURL"].ToString();
-                                var name = row["MODULENAME"].ToString();
-
-                                if (!string.IsNullOrEmpty(key) && !string.IsNullOrEmpty(name))
-                                {
-                                    modules[key] = name;
-                                }
-                            }
-                        }
-                    }
-                    await myCon.CloseAsync();
-                    return modules;
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, $"An error occurred while fetching modules; Exception: {ex.Message}");
-                    return null;
-                }
-            }
-        }
-
-        private async Task<string?> _fetchMappings(string dbTable)
-        {
+            // initialize dictionary...
             var dict = new Dictionary<string, string>();
             string sqlDatasource = _connString;
-
+            
+            // establish SQL connection...
             await using (SqlConnection myCon = new SqlConnection(sqlDatasource))
             {
                 try
                 {
+                    // open SQL connection and dump table contents (company or module)...
                     await myCon.OpenAsync();
                     using (SqlCommand myCommand = new SqlCommand($"select * from dbo.{dbTable}", myCon))
                     {
                         using (SqlDataReader myReader = myCommand.ExecuteReader())
                         {
+                            // access results in reader table...
                             DataTable table = new DataTable();
                             table.Load(myReader);
 
+                            // define key and value columns associated with each DB...
                             string keyColumn = (dbTable == "COMPANY") ? "COMPANYKEY" : "MODULEURL";
                             string valColumn = (dbTable == "COMPANY") ? "COMPANYNAME" : "MODULENAME";
 
+                            // iterate the results of the DB query...
                             foreach (DataRow row in table.Rows)
                             {
+                                // ensure both are non-null before adding to dict...
                                 string? key = row[keyColumn].ToString();
                                 string? value = row[valColumn].ToString();
-
                                 if (!string.IsNullOrEmpty(key) && !string.IsNullOrEmpty(value))
                                 {
                                     dict[key] = value;
@@ -352,40 +223,53 @@ namespace LoginPortal.Server.Controllers
                             }
                         }
                     }
+                    // close connection and return dictionary...
                     await myCon.CloseAsync();
                     return JsonSerializer.Serialize(dict);
                 }
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, $"An error occurred while fetching {dbTable} mappings; Exception: {ex.Message}");
-                    return null;
+                    return $"An error occurred while fetching {dbTable} mappings; Exception: {ex.Message}";
                 }
             }
         }
 
+        // fetch company and module mappings for in-app translation...
         [HttpPost]
         [Route("FetchMappings")]
         public async Task<JsonResult> FetchMappings()
         {
             try
             {
-                //var rawCompanies = await FetchCompanies();
-                //var companies = JsonSerializer.Serialize(rawCompanies);
+                // retrieve companies/modules JSON dict from DB...
                 string companies = await _fetchMappings("COMPANY");
-                Response.Cookies.Append("company_mapping", companies, CookieService.AccessOptions());
-
-                //var rawModules = await FetchModules();
-                //var modules = JsonSerializer.Serialize(rawModules);
                 string modules = await _fetchMappings("MODULE");
-                Response.Cookies.Append("module_mapping", modules, CookieService.AccessOptions());
 
-                return new JsonResult(new
+                // handle errors in helper utility...
+                if (companies.Contains("error") || modules.Contains("error"))
                 {
-                    success = true,
-                    companies = companies,
-                    modules = modules,
-                    message = "Company and Module mappings have been stored in cookies."
-                });
+                    return new JsonResult(new
+                    {
+                        success = false,
+                        message = "Error: _fetchMappings() internal helper returned invalid results."
+                    });
+                }
+
+                // cache validated results in cookies and return results for client storage...
+                else
+                {
+                    Response.Cookies.Append("company_mapping", companies, CookieService.AccessOptions());
+                    Response.Cookies.Append("module_mapping", modules, CookieService.AccessOptions());
+
+                    return new JsonResult(new
+                    {
+                        success = true,
+                        companies = companies,
+                        modules = modules,
+                        message = "Company and Module mappings have been stored in cookies."
+                    });
+                }
             }
             catch (Exception ex)
             {
@@ -401,13 +285,14 @@ namespace LoginPortal.Server.Controllers
  
         Login(username, password)
 
-        Handles both driver and administrator login credentials, sending the former to
-        the standard application flow and the latter to the admin portal.
-
         Queries the USERS database table for any users matching the provided username 
-        and password combination provided by the user. On successful query, declare the
-        task (ie: admin/driver) and return the powerunit on record when logging into a
-        valid driver account.
+        and password combination provided by the user. Successful authorization
+        generates the access tokens and caches tokens and critical user data in cookies 
+        for use later.
+
+        On success, the user credentials (including any companies/modules they have 
+        access to) are passed back to the client for dynamic app navigation based on
+        predefined permissions.
 
         *//////////////////////////////////////////////////////////////////////////////
 
@@ -425,23 +310,22 @@ namespace LoginPortal.Server.Controllers
             string sqlDatasource = _connString;
             SqlDataReader myReader;
 
-            await using (SqlConnection myCon = new SqlConnection(sqlDatasource))
+            try
             {
-                using (SqlCommand myCommand = new SqlCommand(query, myCon))
+                await using (SqlConnection myCon = new SqlConnection(sqlDatasource))
                 {
-                    myCon.Open();
-                    myCommand.Parameters.AddWithValue("@USERNAME", credentials.USERNAME);
-                    myCommand.Parameters.AddWithValue("@PASSWORD", credentials.PASSWORD);
+                    using (SqlCommand myCommand = new SqlCommand(query, myCon))
+                    {
+                        myCon.Open();
+                        myCommand.Parameters.AddWithValue("@USERNAME", credentials.USERNAME);
+                        myCommand.Parameters.AddWithValue("@PASSWORD", credentials.PASSWORD);
 
-                    myReader = myCommand.ExecuteReader();
-                    table.Load(myReader);
-                    myReader.Close();
-                    myCon.Close();
+                        myReader = myCommand.ExecuteReader();
+                        table.Load(myReader);
+                        myReader.Close();
+                        myCon.Close();
+                    }
                 }
-            }
-
-            if (table.Rows.Count > 0)
-            {
                 var row = table.Rows[0];
 
                 // initialize user values...
@@ -477,33 +361,34 @@ namespace LoginPortal.Server.Controllers
 
                 };
 
-                // generate token...
-                var tokenService = new TokenService(_configuration);
-                (string accessToken, string refreshToken) = tokenService.GenerateToken(credentials.USERNAME);
-
-                /*Response.Cookies.Append("access_token", accessToken, CookieService.accessOptions);
-                Response.Cookies.Append("username", user.Username, CookieService.accessOptions);
-                Response.Cookies.Append("company", user.ActiveCompany, CookieService.accessOptions);
-                Response.Cookies.Append("refresh_token", refreshToken, CookieService.removeOptions);
-                var tokenService = new TokenService(_configuration);
-                (bool success, string message) = tokenService.AuthorizeRequest(HttpContext);*/
-
-                Response.Cookies.Append("access_token", accessToken, CookieService.AccessOptions());
-                Response.Cookies.Append("refresh_token", refreshToken, CookieService.RefreshOptions());
-                Response.Cookies.Append("username", user.Username, CookieService.AccessOptions());
-                Response.Cookies.Append("company", user.ActiveCompany, CookieService.AccessOptions());
-
-                return new JsonResult(new
+                // validate the user has access to at least one company & module...
+                if (user.Companies.Count > 0 && user.Modules.Count > 0)
                 {
-                    success = true,
-                    user = user,
-                    //accessToken = accessToken,
-                    //refreshToken = refreshToken
-                });
+                    // generate tokens...
+                    var tokenService = new TokenService(_configuration);
+                    (string accessToken, string refreshToken) = tokenService.GenerateToken(credentials.USERNAME);
+
+                    // catch tokens and user data 
+                    Response.Cookies.Append("access_token", accessToken, CookieService.AccessOptions());
+                    Response.Cookies.Append("refresh_token", refreshToken, CookieService.RefreshOptions());
+                    Response.Cookies.Append("username", user.Username, CookieService.AccessOptions());
+                    Response.Cookies.Append("company", user.ActiveCompany, CookieService.AccessOptions());
+
+                    // return user object on success...
+                    return new JsonResult(new
+                    {
+                        success = true,
+                        user = user
+                    });
+                }
+                else
+                {
+                    return new JsonResult(new { success = false, message = "No results found for company and/or module permissions for the current user." });
+                }
             }
-            else
+            catch (Exception ex)
             {
-                return new JsonResult(new { success = false, message = "Invalid Credentials" });
+                return new JsonResult(new { success = false, message = "Cookie not found:" + ex });
             }
         }
 
@@ -592,8 +477,102 @@ namespace LoginPortal.Server.Controllers
             }
         }
 
-        /* *** *** FUNCTIONS BELOW THIS LINE HAVE NOT YET BEEN SEEN IN REDEVELOPMENT *** *** */
+        [HttpPost]
+        [Route("PullDriver")]
+        public async Task<JsonResult> PullDriver([FromBody] driverRequest request)
+        {
+            string query = "SELECT USERNAME, PASSWORD, POWERUNIT FROM dbo.USERS WHERE USERNAME = @USERNAME";
 
+            DataTable table = new DataTable();
+            string sqlDatasource = _connString;
+            driverCredentials driver = new driverCredentials();
+
+            await using (SqlConnection myCon = new SqlConnection(sqlDatasource))
+            {
+                try
+                {
+                    myCon.Open();
+                    using (SqlCommand myCommand = new SqlCommand(query, myCon))
+                    {
+                        myCommand.Parameters.AddWithValue("@USERNAME", request.USERNAME);
+                        using (SqlDataReader myReader = await myCommand.ExecuteReaderAsync())
+                        {
+                            if (myReader.Read())
+                            {
+                                driver.USERNAME = myReader["USERNAME"].ToString();
+                                driver.PASSWORD = myReader["PASSWORD"].ToString();
+                                driver.POWERUNIT = myReader["POWERUNIT"].ToString();
+                            }
+                            myReader.Close();
+                        }
+                    }
+                    myCon.Close();
+
+                    // validate password...
+                    bool valid = driver.PASSWORD == null || driver.PASSWORD == "" ? false : true;
+                    return new JsonResult(new
+                    {
+                        success = true,
+                        username = driver.USERNAME,
+                        password = valid,
+                        powerunit = driver.POWERUNIT
+                    });
+                }
+                catch (Exception ex)
+                {
+                    return new JsonResult(new { success = false, error = ex.Message });
+                }
+            }
+        }
+
+        [HttpPut]
+        [Route("InitializeDriver")]
+        public async Task<JsonResult> InitializeDriver([FromBody] driverCredentials user)
+        {
+            string updateQuery = "UPDATE dbo.USERS SET PASSWORD=@PASSWORD, POWERUNIT=@POWERUNIT WHERE USERNAME=@USERNAME";
+
+            DataTable table = new DataTable();
+            string sqlDatasource = _connString;
+
+            await using (SqlConnection myCon = new SqlConnection(sqlDatasource))
+            {
+                try
+                {
+                    // open the db connection...
+                    myCon.Open();
+
+                    // delete the old user from dbo.USERS...
+                    using (SqlCommand updateCommand = new SqlCommand(updateQuery, myCon))
+                    {
+                        updateCommand.Parameters.AddWithValue("@USERNAME", user.USERNAME);
+                        updateCommand.Parameters.AddWithValue("@PASSWORD", user.PASSWORD);
+                        updateCommand.Parameters.AddWithValue("@POWERUNIT", user.POWERUNIT);
+
+
+                        int updateResult = await updateCommand.ExecuteNonQueryAsync();
+
+                        // check if old user was deleted successfully...
+                        if (updateResult <= 0)
+                        {
+                            return new JsonResult(new { success = false, message = "User not found or no changes made." });
+                        }
+                    }
+
+                    // close db connection...
+                    myCon.Close();
+
+                    // return success message...
+                    return new JsonResult(new { success = true });
+                }
+                catch (Exception ex)
+                {
+                    return new JsonResult(new { success = false, message = "Error: " + ex.Message });
+                }
+            }
+        }
+
+        /* *** *** VALIDATE THAT ALL FUNCTIONS BELOW THIS POINT ARE NOT INACTIVE, REMOVE IF SO *** *** */
+        /*
         [HttpPost]
         [Route("RefreshToken")]
         public IActionResult RefreshToken([FromBody] RefreshRequest request)
@@ -726,15 +705,6 @@ namespace LoginPortal.Server.Controllers
             }
         }
 
-        /*/////////////////////////////////////////////////////////////////////////////
-
-        VerifyPowerunit(driverVerification driver)
-
-        Token-protected verification of powerunit/delivery date combination existence
-        in database. Handling of success/fail is handled with frontend logic.
-
-        *//////////////////////////////////////////////////////////////////////////////
-
         // LOGIN FUNCTION...
         [HttpPost]
         [Route("VerifyPowerunit")]
@@ -793,15 +763,6 @@ namespace LoginPortal.Server.Controllers
                 }
             }
         }
-
-        /*/////////////////////////////////////////////////////////////////////////////
- 
-        GetAllDrivers() - INACTIVE
-
-        Helper function used in debugging, originally used in the context of a 'dump 
-        users' button to dump all current users to console for review.
-
-        *//////////////////////////////////////////////////////////////////////////////
 
         [HttpGet]
         [Route("GetAllDrivers")]
@@ -985,51 +946,7 @@ namespace LoginPortal.Server.Controllers
         }
 
         // ADMIN + LOGIN FUNCTION...
-        [HttpPut]
-        [Route("InitializeDriver")]
-        public async Task<JsonResult> InitializeDriver([FromBody] driverCredentials user)
-        {
-            string updateQuery = "UPDATE dbo.USERS SET PASSWORD=@PASSWORD, POWERUNIT=@POWERUNIT WHERE USERNAME=@USERNAME";
-
-            DataTable table = new DataTable();
-            string sqlDatasource = _connString;
-
-            await using (SqlConnection myCon = new SqlConnection(sqlDatasource))
-            {
-                try
-                {
-                    // open the db connection...
-                    myCon.Open();
-
-                    // delete the old user from dbo.USERS...
-                    using (SqlCommand updateCommand = new SqlCommand(updateQuery, myCon))
-                    {
-                        updateCommand.Parameters.AddWithValue("@USERNAME", user.USERNAME);
-                        updateCommand.Parameters.AddWithValue("@PASSWORD", user.PASSWORD);
-                        updateCommand.Parameters.AddWithValue("@POWERUNIT", user.POWERUNIT);
-
-
-                        int updateResult = await updateCommand.ExecuteNonQueryAsync();
-
-                        // check if old user was deleted successfully...
-                        if (updateResult <= 0)
-                        {
-                            return new JsonResult(new { success = false, message = "User not found or no changes made." });
-                        }
-                    }
-
-                    // close db connection...
-                    myCon.Close();
-
-                    // return success message...
-                    return new JsonResult(new { success = true });
-                }
-                catch (Exception ex)
-                {
-                    return new JsonResult(new { success = false, message = "Error: " + ex.Message });
-                }
-            }
-        }
+        
 
         // ADMIN FUNCTION...
         [HttpDelete]
@@ -1079,76 +996,6 @@ namespace LoginPortal.Server.Controllers
         }
 
         // ADMIN + LOGIN FUNCTION...
-        [HttpPost]
-        //[HttpGet]
-        [Route("PullDriver")]
-        public async Task<JsonResult> PullDriver([FromBody] driverRequest request)
-        {
-            string query = "SELECT USERNAME, PASSWORD, POWERUNIT FROM dbo.USERS WHERE USERNAME = @USERNAME";
-
-            DataTable table = new DataTable();
-            string sqlDatasource = _connString;
-            driverCredentials driver = new driverCredentials();
-
-            await using (SqlConnection myCon = new SqlConnection(sqlDatasource))
-            {
-                try
-                {
-                    myCon.Open();
-                    using (SqlCommand myCommand = new SqlCommand(query, myCon))
-                    {
-                        myCommand.Parameters.AddWithValue("@USERNAME", request.USERNAME);
-                        using (SqlDataReader myReader = await myCommand.ExecuteReaderAsync())
-                        {
-                            if (myReader.Read())
-                            {
-                                driver.USERNAME = myReader["USERNAME"].ToString();
-                                driver.PASSWORD = myReader["PASSWORD"].ToString();
-                                driver.POWERUNIT = myReader["POWERUNIT"].ToString();
-                            }
-                            myReader.Close();
-                        }
-                    }
-                    myCon.Close();
-
-                    // generate token...
-                    var tokenService = new TokenService(_configuration);
-                    (string accessToken, string refreshToken) = tokenService.GenerateToken(driver.USERNAME);
-
-                    // validate password...
-                    bool valid = driver.PASSWORD == null || driver.PASSWORD == "" ? false : true;
-                    if (request.admin)
-                    {
-                        return new JsonResult(new {
-                            success = true,
-                            username = driver.USERNAME,
-                            password = driver.PASSWORD,
-                            powerunit = driver.POWERUNIT,
-                            accessToken = accessToken,
-                            refreshToken = refreshToken
-                        });
-                    }
-                    else
-                    {
-                        return new JsonResult(new
-                        {
-                            success = true,
-                            username = driver.USERNAME,
-                            password = valid,
-                            powerunit = driver.POWERUNIT,
-                            accessToken = accessToken,
-                            refreshToken = refreshToken
-                        });
-                    }
-                }
-                catch (Exception ex)
-                {
-                    return new JsonResult(new { success = false, error = ex.Message });
-                }
-            }
-        }
-
-        // ADMIN + LOGIN FUNCTION...
         [HttpGet]
         [Route("GetCompany")]
         public async Task<JsonResult> GetCompany([FromQuery] string COMPANYKEY)
@@ -1189,59 +1036,6 @@ namespace LoginPortal.Server.Controllers
                 }
             }
         }
-
-        // ADMIN FUNCTION...
-        /*[HttpPut]
-        [Route("SetCompany")]
-        [Authorize]
-        public async Task<JsonResult> SetCompany([FromBody] string COMPANYNAME)
-        {
-            string query = "update dbo.COMPANY set COMPANYNAME=@COMPANYNAME where COMPANYKEY=@COMPANYKEY";
-            string insertQuery = "insert into dbo.COMPANY (COMPANYKEY, COMPANYNAME) values (@COMPANYKEY, @COMPANYNAME)";
-
-            DataTable table = new DataTable();
-            string sqlDatasource = _connString;
-
-            await using (SqlConnection myCon = new SqlConnection(sqlDatasource))
-            {
-                try
-                {
-                    await myCon.OpenAsync();
-                    using (SqlCommand myCommand = new SqlCommand(query, myCon))
-                    {
-                        myCommand.Parameters.AddWithValue("@COMPANYNAME", COMPANYNAME);
-                        myCommand.Parameters.AddWithValue("@COMPANYKEY", "c01");
-
-                        int rowsAffected = await myCommand.ExecuteNonQueryAsync();
-
-                        if (rowsAffected > 0)
-                        {
-                            return new JsonResult(new { success = true, message = "Company Updated", COMPANYNAME });
-                        }
-                    }
-
-                    using (SqlCommand myCommand = new SqlCommand(insertQuery, myCon))
-                    {
-                        myCommand.Parameters.AddWithValue("@COMPANYNAME", COMPANYNAME);
-                        myCommand.Parameters.AddWithValue("@COMPANYKEY", "c01");
-
-                        int rowsInserted = await myCommand.ExecuteNonQueryAsync();
-
-                        if (rowsInserted > 0)
-                        {
-                            return new JsonResult(new { success = true, message = "New Company Added", COMPANYNAME });
-                        }
-                        else
-                        {
-                            return new JsonResult(new { success = false, message = "Failed to add new company" });
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    return new JsonResult("Error: " + ex.Message);
-                }
-            }
-        }*/
+        */
     }
 }
