@@ -171,21 +171,17 @@ button {
 
 #AccountTab {
     display: flex;
-    flex-direction: row;
     align-items: center;
-    padding: 1% 4%;
-    justify-content: flex-start;
+    padding: 0.5em 4%;
+    justify-content: space-between;
     border-top: 1px solid #353535;
     border-bottom: 1px solid #353535;
     box-shadow: 0px 3px 4px #00000020;
-    /*background-color: #e0eaf3;*/
 }
 
 #sticky_MDPU {
     display: flex;
-    /*justify-content: start;*/
     width: 60%;
-    /*gap: 1%;*/
     flex-direction: row;
     align-items: center;
     justify-content: flex-start;
@@ -197,7 +193,7 @@ button {
     }
 
     #sticky_MDPU h4 {
-        margin: 0 0% 0 0;
+        margin: 0;
     }
 
     #sticky_MDPU div {
@@ -210,7 +206,7 @@ button {
 #sticky_creds {
     display: flex;
     flex-direction: row;
-    width: 50%;
+    width: 100%;
     align-items: center;
 }
 
@@ -419,7 +415,7 @@ button {
     .popup p {
         margin: 0;
         margin-block-start: 0;
-        margin-block-end: 0.75em;
+        margin-block-end: 0;
         margin-inline-start: 0;
         margin-inline-end: 0;
     }
@@ -431,7 +427,7 @@ button {
 #popupPrompt {
     display: flex;
     justify-content: center;
-    margin-bottom: 0.5em;
+    /*margin-bottom: 0.5em;*/
 }
 
 .popupContent {
@@ -504,6 +500,10 @@ button {
     border: solid 1.5px red;
     border-radius: 3px; 
     background-color: #ffdddd;
+}
+
+#main_title {
+    text-align: left;
 }
 
 @media only screen and (max-width: 400px) {
@@ -602,6 +602,15 @@ button {
 
     .fail_flag p {
         font-size: smaller;
+    }
+
+    #title_dash {
+        display: flex;
+    }
+
+    #footer_text {
+        margin-block: 1%;
+        margin-inline: 20%;
     }
 }
 

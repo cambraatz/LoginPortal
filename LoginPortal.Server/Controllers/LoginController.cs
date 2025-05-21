@@ -544,6 +544,23 @@ namespace LoginPortal.Server.Controllers
         [Route("InitializeDriver")]
         public async Task<JsonResult> InitializeDriver([FromBody] driverCredentials user)
         {
+            var tokenService = new TokenService(_configuration);
+            (bool success, string message) tokenAuth = tokenService.AuthorizeRequest(HttpContext);
+            if (!tokenAuth.success)
+            {
+                UnauthorizedAccessException exception = new UnauthorizedAccessException($"Token authorization failed, {tokenAuth.message}");
+                _logger.LogError(exception, exception.Message);
+                return new JsonResult(new { success = false, message = exception.Message }) { StatusCode = StatusCodes.Status401Unauthorized };
+            }
+
+            var username = Request.Cookies["username"];
+            if (username == null)
+            {
+                ArgumentNullException exception = new ArgumentNullException($"Failed to find 'username' from cookies");
+                _logger.LogError(exception, exception.Message);
+                return new JsonResult(new { success = false, message = exception.Message }) { StatusCode = StatusCodes.Status401Unauthorized };
+            }
+
             string updateQuery = "UPDATE dbo.USERS SET PASSWORD=@PASSWORD, POWERUNIT=@POWERUNIT WHERE USERNAME=@USERNAME";
 
             DataTable table = new DataTable();
