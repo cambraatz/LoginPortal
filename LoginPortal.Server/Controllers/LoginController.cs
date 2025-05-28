@@ -8,6 +8,7 @@ Update: 4/8/2025
 
 using LoginPortal.Server.Models;
 using LoginPortal.Server.Services;
+using LoginPortal.Server.Services.Interfaces;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Logging;
@@ -52,11 +53,11 @@ namespace LoginPortal.Server.Controllers
     public class LoginController : ControllerBase
     {
         private readonly IConfiguration _configuration;
-        private readonly TokenService _tokenService;
+        private readonly ITokenService _tokenService;
         private readonly ILogger<LoginController> _logger;
         private readonly string? _connString;
 
-        public LoginController(IConfiguration configuration, TokenService tokenService, ILogger<LoginController> logger)
+        public LoginController(IConfiguration configuration, ITokenService tokenService, ILogger<LoginController> logger)
         {
             _configuration = configuration;
             _tokenService = tokenService;
@@ -149,8 +150,8 @@ namespace LoginPortal.Server.Controllers
                         };
 
                         // generate token...
-                        var tokenService = new TokenService(_configuration);
-                        (string accessToken, string refreshToken) = tokenService.GenerateToken(username);
+                        //var tokenService = new TokenService(_configuration);
+                        (string accessToken, string refreshToken) = _tokenService.GenerateToken(username);
 
                         // cache app data in cookies...
                         Response.Cookies.Append("access_token", accessToken, CookieService.AccessOptions());
@@ -380,8 +381,8 @@ namespace LoginPortal.Server.Controllers
                 if (user.Companies.Count > 0 && user.Modules.Count > 0)
                 {
                     // generate tokens...
-                    var tokenService = new TokenService(_configuration);
-                    (string accessToken, string refreshToken) = tokenService.GenerateToken(credentials.USERNAME);
+                    //var tokenService = new TokenService(_configuration);
+                    (string accessToken, string refreshToken) = _tokenService.GenerateToken(credentials.USERNAME);
 
                     // catch tokens and user data 
                     Response.Cookies.Append("access_token", accessToken, CookieService.AccessOptions());
@@ -544,8 +545,8 @@ namespace LoginPortal.Server.Controllers
         [Route("InitializeDriver")]
         public async Task<JsonResult> InitializeDriver([FromBody] driverCredentials user)
         {
-            var tokenService = new TokenService(_configuration);
-            (bool success, string message) tokenAuth = tokenService.AuthorizeRequest(HttpContext);
+            //var tokenService = new TokenService(_configuration);
+            (bool success, string message) tokenAuth = _tokenService.AuthorizeRequest(HttpContext);
             if (!tokenAuth.success)
             {
                 UnauthorizedAccessException exception = new UnauthorizedAccessException($"Token authorization failed, {tokenAuth.message}");

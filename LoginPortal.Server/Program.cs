@@ -1,4 +1,5 @@
 using LoginPortal.Server.Services;
+using LoginPortal.Server.Services.Interfaces;
 
 using Newtonsoft.Json.Serialization;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -9,10 +10,19 @@ using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using System.Reflection.PortableExecutable;
 
+using Serilog;
+
 // new modification to CORS package...
 var MyAllowSpecificOrigins = "_myAllowSpecificOrigins";
 
 var builder = WebApplication.CreateBuilder(args);
+
+Log.Logger = new LoggerConfiguration()
+    .WriteTo.File("/var/www/login/log/logs.log", rollingInterval: RollingInterval.Day)
+    .Enrich.FromLogContext()
+    .CreateLogger();
+
+builder.Host.UseSerilog();
 
 builder.WebHost.ConfigureKestrel(options =>
 {
@@ -74,7 +84,9 @@ builder.Services.AddControllers().AddNewtonsoftJson(options =>
 options.SerializerSettings.ReferenceLoopHandling = Newtonsoft.Json.ReferenceLoopHandling.Ignore).AddNewtonsoftJson(
     options => options.SerializerSettings.ContractResolver = new DefaultContractResolver());
 
-builder.Services.AddScoped<TokenService>();
+builder.Services.AddScoped<ITokenService, TokenService>();
+builder.Services.AddScoped<IUserService, UserService>();
+builder.Services.AddScoped<IMappingService, MappingService>();
 
 var app = builder.Build();
 

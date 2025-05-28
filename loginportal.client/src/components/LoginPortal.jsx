@@ -105,21 +105,18 @@ const LoginPortal = () => {
     // leverage cookies to fetch current user credentials...
     async function pullCredentials() {
         // fetch credentials
-        const response = await fetch(API_URL + "api/Login/PullCredentials", {
+        const response = await fetch(API_URL + "v1/sessions/credentials", {
             method: "POST",
             headers: {
                 'Content-Type': 'application/json; charset=UTF-8'
             },
             credentials: "include",
-        }); if(!response.ok) {
-            console.error("Cookie access failed.");
-        }
+        });
 
-        const data = await response.json();
-        //console.log(data);
+        // if valid response, 
+        if (response.ok) {
+            const data = await response.json();
 
-        //
-        if (data.success) {
             // update state values to curr user...      
             setUser(data.user);
             setCompanies(data.user.Companies);
@@ -141,7 +138,7 @@ const LoginPortal = () => {
         localStorage.clear();
         sessionStorage.clear();
 
-        const response = await fetch(API_URL + "api/Login/Logout", {
+        const response = await fetch(API_URL + "v1/sessions/logout", {
             method: "POST",
             headers: {
                 'Content-Type': 'application/json; charset=UTF-8'
@@ -156,8 +153,9 @@ const LoginPortal = () => {
     }
 
     async function fetchMappings() {
-        const mapping_response = await fetch(`${API_URL}api/Login/FetchMappings`, {
-            method: "POST",
+        //const mapping_response = await fetch(`${API_URL}api/Login/FetchMappings`, {
+        const mapping_response = await fetch(`${API_URL}v1/mappings?type=all`, {
+            method: "GET",
             headers: {
                 'Content-Type': 'application/json; charset=UTF-8'
             }
@@ -165,10 +163,10 @@ const LoginPortal = () => {
 
         if(mapping_response.ok) {
             const mappings = await mapping_response.json();
-            sessionStorage.setItem("companies_map", mappings.companies);
+            sessionStorage.setItem("companies_map", JSON.stringify(mappings.companies));
             console.log("companies_map: ", mappings.companies);
             
-            sessionStorage.setItem("modules_map", mappings.modules);
+            sessionStorage.setItem("modules_map", JSON.stringify(mappings.modules));
             console.log("modules_map: ", mappings.modules);                
         } else {
             console.error("Error setting mapping cookies.");
@@ -337,7 +335,15 @@ const LoginPortal = () => {
             return;
         }
 
-        const response = await fetch(API_URL + "api/Login/Login", {
+        /*const response = await fetch(API_URL + "api/Login/Login", {
+            body: JSON.stringify(credentials),
+            method: "POST",
+            headers: {
+                'Content-Type': 'application/json; charset=UTF-8'
+            }
+        })*/
+
+        const response = await fetch(API_URL + "v1/sessions/login", {
             body: JSON.stringify(credentials),
             method: "POST",
             headers: {
@@ -345,10 +351,13 @@ const LoginPortal = () => {
             }
         })
 
-        const data = await response.json();
+        //const data = await response.json();
         //console.log(data);
 
-        if (data.success) {
+        //if (data.success) {
+        if (response.ok) {
+            const data = await response.json();
+
             // update state values to curr user...      
             setUser(data.user);
             setCompanies(data.user.Companies);
@@ -646,6 +655,7 @@ const LoginPortal = () => {
 
         if (company) {
             const COMPANIES = JSON.parse(sessionStorage.getItem("companies_map") || "{}");
+            //const COMPANIES = sessionStorage.getItem("companies_map") || "{}";
             setUser({...user, ActiveCompany: COMPANIES[company]});
 
             // select company to work under...
