@@ -7,6 +7,9 @@ loginportal.client/node_modules/
 bin/
 obj/
 
+loginportal.client/.env.development
+loginportal.client/.env.production
+
 ScaffoldingReadMe.txt
 
 *.user
