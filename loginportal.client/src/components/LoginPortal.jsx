@@ -10,12 +10,14 @@ import { useState, useEffect } from 'react';
 import Header from './Header';
 import Footer from './Footer';
 import { 
-    API_URL,
+    //API_URL,
     resetStyling,
     flagError,
     errorStyling,
     showFailFlag
 } from '../scripts/helperFunctions';
+
+const API_URL = import.meta.env.VITE_API_URL;
 
 /*/////////////////////////////////////////////////////////////////////
 
@@ -158,16 +160,17 @@ const LoginPortal = () => {
             method: "GET",
             headers: {
                 'Content-Type': 'application/json; charset=UTF-8'
-            }
+            },
+            credentials: 'include',
         })
 
         if(mapping_response.ok) {
             const mappings = await mapping_response.json();
             sessionStorage.setItem("companies_map", JSON.stringify(mappings.companies));
-            console.log("companies_map: ", mappings.companies);
+            //console.log("companies_map: ", mappings.companies);
             
             sessionStorage.setItem("modules_map", JSON.stringify(mappings.modules));
-            console.log("modules_map: ", mappings.modules);                
+            //console.log("modules_map: ", mappings.modules);                
         } else {
             console.error("Error setting mapping cookies.");
         }
@@ -370,6 +373,9 @@ const LoginPortal = () => {
             openPopup();
             return;
         } else {
+            if (response.status === 400) {
+                alert("User lacks valid company or module permissions, contact administrator.");
+            }
             // reset state values to null...
             setCompanies([]);
             setModules([]);
@@ -509,7 +515,8 @@ const LoginPortal = () => {
             PASSWORD: credentials.PASSWORD,
             POWERUNIT: credentials.POWERUNIT // this is the field that may change...
         }
-        const response = await fetch(API_URL + "api/Login/InitializeDriver", {
+        //const response = await fetch(API_URL + "api/Login/InitializeDriver", {
+        const response = await fetch(API_URL + `v1/drivers/${credentials.USERNAME}`, {
             body: JSON.stringify(body_data),
             method: "PUT",
             headers: {
@@ -550,35 +557,37 @@ const LoginPortal = () => {
             PASSWORD: null,
             POWERUNIT: null
         }
-        const response = await fetch(API_URL + "api/Login/PullDriver", {
-            body: JSON.stringify(body_data),
-            method: "POST",
+        //const response = await fetch(API_URL + "api/Login/PullDriver", {
+        const response = await fetch(API_URL + `v1/drivers/${credentials.USERNAME}`, {
+            //body: JSON.stringify(body_data),
+            method: "GET",
             headers: {
                 'Content-Type': 'application/json; charset=UTF-8'
             },
             credentials: 'include'
         });
-        
-        const data = await response.json()
-        //console.log(data);
 
         // catch failed request and prevent behavior...
-        if (!data.success) {
+        if (!response.ok) {
             //document.getElementById("username").className = "invalid_input";
             document.getElementById("username").classList.add("invalid_input");
             showFailFlag("ff_login_nu", "Username not found!");
         }
         else {
+            const data = await response.json()
+            const user = data.user;
+            //console.log(data);
+
             // if password exists, fail out...
-            if (data.password){
+            if (user.password){
                 document.getElementById("username").classList.add("invalid_input");
                 showFailFlag("ff_login_nu", "Username already exists!");
             } else {
                 // initialize new user fields and open popup to collect password...
                 setCredentials({
-                    USERNAME: data.username,
+                    USERNAME: user.Username,
                     PASSWORD: "",
-                    POWERUNIT: data.powerunit
+                    POWERUNIT: user.Powerunit
                 })
                 setPopup("edit_new_user");
             }
@@ -628,9 +637,9 @@ const LoginPortal = () => {
 
     async function pressButton(e) {
         let company = null;
-        console.log(`targeting e.target.id: ${e.target.id}`);
-        console.log("company options: ", companies);
-        console.log("mdules options: ", modules);
+        //console.log(`targeting e.target.id: ${e.target.id}`);
+        //console.log("company options: ", companies);
+        //console.log("mdules options: ", modules);
 
         switch(e.target.id){
             case "cp1":
@@ -659,11 +668,12 @@ const LoginPortal = () => {
             setUser({...user, ActiveCompany: COMPANIES[company]});
 
             // select company to work under...
-            const response = await fetch(API_URL + "api/Login/SetCompany", {
-                body: JSON.stringify({ 
+            //const response = await fetch(API_URL + "api/Login/SetCompany", {
+            const response = await fetch(API_URL + `v1/drivers/${credentials.USERNAME}/${Object.keys(COMPANIES).find(key => COMPANIES[key] === COMPANIES[company])}`, {
+                /*body: JSON.stringify({ 
                     username: credentials.USERNAME,
                     company: Object.keys(COMPANIES).find(key => COMPANIES[key] === COMPANIES[company]) 
-                }),
+                }),*/
                 method: "POST",
                 headers: {
                     'Content-Type': 'application/json; charset=UTF-8'
@@ -682,23 +692,23 @@ const LoginPortal = () => {
         let mod = null;
         switch(e.target.id){
             case "md1":
-                console.log(`Clicked ${modules[0]}`);
+                //console.log(`Clicked ${modules[0]}`);
                 mod = modules[0];
                 break;
             case "md2":
-                console.log(`Clicked ${modules[1]}`);
+                //console.log(`Clicked ${modules[1]}`);
                 mod = modules[1];
                 break;
             case "md3":
-                console.log(`Clicked ${modules[2]}`);
+                //console.log(`Clicked ${modules[2]}`);
                 mod = modules[2];
                 break;
             case "md4":
-                console.log(`Clicked ${modules[3]}`);
+                //console.log(`Clicked ${modules[3]}`);
                 mod = modules[3];
                 break;
             case "md5":
-                console.log(`Clicked ${modules[4]}`);
+                //console.log(`Clicked ${modules[4]}`);
                 mod = modules[4];
                 break;
             default:
@@ -707,7 +717,7 @@ const LoginPortal = () => {
 
         // navigates to selected module using MODULEURL...
         if (mod) {
-            console.log(`mod: ${mod}`);
+            //console.log(`mod: ${mod}`);
             if (mod === "deliverymanager" || mod === "admin") {
                 window.location.href = `https://${mod}.tcsservices.com/`;
             } else {
@@ -783,7 +793,7 @@ const LoginPortal = () => {
             if (companies.length > 0) {
                 return companies.map((company,i) => {
                     if (company === "") { return null; }
-                    console.log(`company: ${company}`);
+                    //console.log(`company: ${company}`);
                     return (
                         <button id={"cp"+(i+1)} key={company+1} type="button" onClick={pressButton}>
                             {COMPANIES[company]}

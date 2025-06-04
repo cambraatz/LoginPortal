@@ -11,7 +11,8 @@ namespace LoginPortal.Server.Services
 
         public MappingService(IConfiguration config, ILogger<MappingService> logger)
         {
-            _connString = config.GetConnectionString("TCSWEB");
+            //_connString = config.GetConnectionString("TCSWEB");
+            _connString = config.GetConnectionString("DriverChecklistTestCon");
             _logger = logger;
         }
 
@@ -42,6 +43,7 @@ namespace LoginPortal.Server.Services
             {
                 string? key = reader[keyCol]?.ToString();
                 string? val = reader[valCol]?.ToString();
+                Console.WriteLine($"key: {key}, value: {val}");
                 if (!string.IsNullOrWhiteSpace(key) && !string.IsNullOrWhiteSpace(val))
                 {
                     dict[key!] = val!;

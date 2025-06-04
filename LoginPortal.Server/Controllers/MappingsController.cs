@@ -11,11 +11,15 @@ namespace LoginPortal.Server.Controllers
     {
         private readonly IMappingService _mappingService;
         private readonly ILogger<MappingsController> _logger;
+        private readonly ICookieService _cookieService;
 
-        public MappingsController(IMappingService mappingService, ILogger<MappingsController> logger)
+        public MappingsController(IMappingService mappingService, 
+            ILogger<MappingsController> logger, 
+            ICookieService cookieService)
         {
             _mappingService = mappingService;
             _logger = logger;
+            _cookieService = cookieService;
         }
 
         // GET /v1/mappings?type={company | module | all}...
@@ -43,8 +47,8 @@ namespace LoginPortal.Server.Controllers
                             _logger.LogWarning("Cookie mapping data is getting large!!! Consider local/session caching...");
                         }
 
-                        Response.Cookies.Append("company_mapping", JsonSerializer.Serialize(companies), CookieService.AccessOptions());
-                        Response.Cookies.Append("module_mapping", JsonSerializer.Serialize(modules), CookieService.AccessOptions());
+                        Response.Cookies.Append("company_mapping", JsonSerializer.Serialize(companies), _cookieService.AccessOptions());
+                        Response.Cookies.Append("module_mapping", JsonSerializer.Serialize(modules), _cookieService.AccessOptions());
 
                         return Ok(new { companies, modules });
 
@@ -55,6 +59,7 @@ namespace LoginPortal.Server.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error retrieving mappings");
+                Console.WriteLine(ex.ToString());
                 return StatusCode(500, new { message = "Server error while retrieving mappings." });
             }
         }

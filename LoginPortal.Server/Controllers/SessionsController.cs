@@ -33,6 +33,7 @@ using System.Net;
 using Microsoft.AspNetCore.DataProtection.KeyManagement;
 using System.Reflection;
 using System.Linq.Expressions;
+using Microsoft.AspNetCore.Http.HttpResults;
 
 /*/////////////////////////////////////////////////////////////////////////////
  
@@ -56,21 +57,26 @@ namespace LoginPortal.Server.Controllers
         private readonly ITokenService _tokenService;
         //private readonly string _connString;
         private readonly ILogger<SessionsController> _logger;
+        private readonly ICookieService _cookieService;
 
-        public SessionsController(IUserService userService, ITokenService tokenService, ILogger<SessionsController> logger)
+        public SessionsController(IUserService userService, 
+            ITokenService tokenService, 
+            ILogger<SessionsController> logger, ICookieService cookieService)
         {
             _userService = userService;
             _tokenService = tokenService;
             //_connString = config.GetConnectionString("TCSWEB");
             _logger = logger;
+            _cookieService = cookieService;
         }
 
         private void UpdateSessionCookies(HttpResponse response, User user, string accessToken, string refreshToken)
         {
-            Response.Cookies.Append("access_token", accessToken, CookieService.AccessOptions());
-            Response.Cookies.Append("refresh_token", refreshToken, CookieService.RefreshOptions());
-            Response.Cookies.Append("username", user.Username!, CookieService.AccessOptions());
-            Response.Cookies.Append("company", user.ActiveCompany!, CookieService.AccessOptions());
+            Response.Cookies.Append("access_token", accessToken, _cookieService.AccessOptions());
+            Response.Cookies.Append("refresh_token", refreshToken, _cookieService.RefreshOptions());
+            Response.Cookies.Append("username", user.Username!, _cookieService.AccessOptions());
+            Response.Cookies.Append("company", user.ActiveCompany!, _cookieService.AccessOptions());
+            Console.WriteLine("Stored User information in cookies...");
         }
 
         // fetch full user credentials to auto-login when return cookie is found...
@@ -94,17 +100,19 @@ namespace LoginPortal.Server.Controllers
         [Route("login")]
         public async Task<IActionResult> Login([FromBody] loginCredentials creds)
         {
-            var user = await _userService.AuthenticateAsync(creds.USERNAME, creds.PASSWORD);
+            User? user = await _userService.AuthenticateAsync(creds.USERNAME!, creds.PASSWORD!);
             if (user == null) 
             {
-                _logger.LogError("Error generating tokens for user {Username}", user.Username);
+                _logger.LogError("Error generating tokens for user {Username}", creds.USERNAME);
+                Console.WriteLine($"Error generating tokens for user {creds.USERNAME}");
                 return Unauthorized(new { message = "Invalid user credentials, contact system administrator." });
             }
 
             if (user.Companies == null || user.Companies!.Count == 0 || user.Modules == null || user.Modules!.Count == 0)
             {
                 _logger.LogError("Error generating tokens for user {Username}", user.Username);
-                return Forbid("No results found for company and/or module permissions for the current user, contact system administrator.");
+                Console.WriteLine($"Error generating tokens for user {user.Username}");
+                return BadRequest(new { message = "No results found for company and/or module permissions for the current user, contact system administrator." });
             }
 
             string access, refresh;
@@ -114,6 +122,7 @@ namespace LoginPortal.Server.Controllers
             } catch (Exception ex)
             {
                 _logger.LogError(ex, "Error generating tokens for user {Username}", user.Username);
+                Console.WriteLine(ex);
                 return StatusCode(500, "Internal error generating authentication tokens.");
             }
 
@@ -142,7 +151,7 @@ namespace LoginPortal.Server.Controllers
         {
             foreach (var cookie in Request.Cookies)
             {
-                Response.Cookies.Append(cookie.Key, "", CookieService.RemoveOptions());
+                Response.Cookies.Append(cookie.Key, "", _cookieService.RemoveOptions());
             }
             return Ok(new { message = "Logged out successfully" });
         }
@@ -158,7 +167,7 @@ namespace LoginPortal.Server.Controllers
             {
                 return BadRequest(new { message = "Valid return cookie not found." });
             }
-            Response.Cookies.Append("return", "", CookieService.RemoveOptions());
+            Response.Cookies.Append("return", "", _cookieService.RemoveOptions());
 
             // ensure username exists in cookies and is non-null...
             string? username;
@@ -183,11 +192,6 @@ namespace LoginPortal.Server.Controllers
             (access, refresh) = _tokenService.GenerateToken(user.Username!);
 
             UpdateSessionCookies(Response, user, access, refresh);
-
-            /*Response.Cookies.Append("access_token", access, CookieService.AccessOptions());
-            Response.Cookies.Append("refresh_token", refresh, CookieService.RefreshOptions());
-            Response.Cookies.Append("username", user.Username!, CookieService.AccessOptions());
-            Response.Cookies.Append("company", user.ActiveCompany!, CookieService.AccessOptions());*/
 
             return Ok(new { user });
         }

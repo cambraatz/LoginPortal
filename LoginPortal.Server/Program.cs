@@ -8,7 +8,6 @@ using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
-using System.Reflection.PortableExecutable;
 
 using Serilog;
 
@@ -24,29 +23,36 @@ Log.Logger = new LoggerConfiguration()
 
 builder.Host.UseSerilog();
 
-builder.WebHost.ConfigureKestrel(options =>
+if (builder.Environment.IsProduction())
 {
-    options.ListenAnyIP(6000);
-});
+    builder.WebHost.ConfigureKestrel(options =>
+    {
+        options.ListenAnyIP(6000);
+    });
 
-// new modification to CORS package...
-builder.Services.AddCors(options => {
-    options.AddPolicy(name: MyAllowSpecificOrigins,
-        policy => {
-            /*policy.WithOrigins("https://localhost:5173",
-                                "https://www.login.tcsservices.com",
-                                "https://login.tcsservices.com",
-                                "www.login.tcsservices.com",
-                                "login.tcsservices.com")
-                                .AllowAnyHeader()
-                                .AllowAnyMethod()
-                                .AllowCredentials();*/
-            policy.SetIsOriginAllowed(origin => new Uri(origin).Host.EndsWith("tcsservices.com"))
-                .AllowAnyHeader()
-                .AllowAnyMethod()
-                .AllowCredentials();
-        });
-});
+    builder.Services.AddCors(options => {
+        options.AddPolicy(name: MyAllowSpecificOrigins,
+            policy => {
+                policy.SetIsOriginAllowed(origin => new Uri(origin).Host.EndsWith("tcsservices.com"))
+                    .AllowAnyHeader()
+                    .AllowAnyMethod()
+                    .AllowCredentials();
+            });
+    });
+}
+else
+{
+    builder.Services.AddCors(options => {
+        options.AddPolicy(name: MyAllowSpecificOrigins,
+            policy => {
+                policy.WithOrigins("https://localhost:5173", "http://localhost:5173",
+                                    "https://localhose:7097", "http://localhost:5171")
+                                    .AllowAnyHeader()
+                                    .AllowAnyMethod()
+                                    .AllowCredentials();
+            });
+    });
+}
 
 // Add services to the container.
 builder.Services.AddControllers();
@@ -87,6 +93,7 @@ options.SerializerSettings.ReferenceLoopHandling = Newtonsoft.Json.ReferenceLoop
 builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IMappingService, MappingService>();
+builder.Services.AddScoped<ICookieService, CookieService>();
 
 var app = builder.Build();
 
@@ -96,7 +103,8 @@ app.UseCookiePolicy(new CookiePolicyOptions
 {
     MinimumSameSitePolicy = SameSiteMode.None,
     HttpOnly = Microsoft.AspNetCore.CookiePolicy.HttpOnlyPolicy.Always,
-    Secure = CookieSecurePolicy.Always
+    Secure = app.Environment.IsProduction() || (app.Environment.IsDevelopment() && app.Configuration.GetValue<bool>("Kestrel:Certificates:Default:Password:IsTrusted", false))
+        ? CookieSecurePolicy.Always : CookieSecurePolicy.SameAsRequest
 });
 
 app.UseAuthentication();
@@ -104,10 +112,13 @@ app.UseAuthorization();
 
 app.UseCors(MyAllowSpecificOrigins);
 
-app.UseForwardedHeaders(new ForwardedHeadersOptions
+if (app.Environment.IsProduction())
 {
-    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
-});
+    app.UseForwardedHeaders(new ForwardedHeadersOptions
+    {
+        ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
+    });
+}
 
 app.UseDefaultFiles();
 app.UseStaticFiles();
@@ -117,8 +128,16 @@ if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
+    //app.UseHttpsRedirection();
+    app.UseDeveloperExceptionPage();
+}
+else
+{
+    app.UseExceptionHandler("/Home/Error");
+    app.UseHsts();
 }
 
+app.UseHttpsRedirection();
 app.MapControllers();
 app.MapFallbackToFile("/index.html");
 
