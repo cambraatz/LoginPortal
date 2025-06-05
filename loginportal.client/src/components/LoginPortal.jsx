@@ -2,19 +2,22 @@
  
 Author: Cameron Braatz
 Date: 11/15/2023
-Update Date: 1/7/2025
+Update Date: 6/5/2025
 
 *//////////////////////////////////////////////////////////////////////
 
 import { useState, useEffect } from 'react';
 import Header from './Header';
 import Footer from './Footer';
+import Success from '../assets/success.svg';
+import Fail from '../assets/error.svg';
 import { 
-    //API_URL,
     resetStyling,
     flagError,
     errorStyling,
-    showFailFlag
+    showFailFlag,
+    SUCCESS_WAIT,
+    FAIL_WAIT
 } from '../scripts/helperFunctions';
 
 const API_URL = import.meta.env.VITE_API_URL;
@@ -155,7 +158,6 @@ const LoginPortal = () => {
     }
 
     async function fetchMappings() {
-        //const mapping_response = await fetch(`${API_URL}api/Login/FetchMappings`, {
         const mapping_response = await fetch(`${API_URL}v1/mappings?type=all`, {
             method: "GET",
             headers: {
@@ -338,14 +340,6 @@ const LoginPortal = () => {
             return;
         }
 
-        /*const response = await fetch(API_URL + "api/Login/Login", {
-            body: JSON.stringify(credentials),
-            method: "POST",
-            headers: {
-                'Content-Type': 'application/json; charset=UTF-8'
-            }
-        })*/
-
         const response = await fetch(API_URL + "v1/sessions/login", {
             body: JSON.stringify(credentials),
             method: "POST",
@@ -354,10 +348,6 @@ const LoginPortal = () => {
             }
         })
 
-        //const data = await response.json();
-        //console.log(data);
-
-        //if (data.success) {
         if (response.ok) {
             const data = await response.json();
 
@@ -515,7 +505,7 @@ const LoginPortal = () => {
             PASSWORD: credentials.PASSWORD,
             POWERUNIT: credentials.POWERUNIT // this is the field that may change...
         }
-        //const response = await fetch(API_URL + "api/Login/InitializeDriver", {
+
         const response = await fetch(API_URL + `v1/drivers/${credentials.USERNAME}`, {
             body: JSON.stringify(body_data),
             method: "PUT",
@@ -530,15 +520,15 @@ const LoginPortal = () => {
 
         // signal update status on screen...
         if (data.success) {
-            setPopup("Update Success");
+            setPopup("Init Success");
             setTimeout(() => {
                 closePopup();
-            },1000)
+            },SUCCESS_WAIT)
         } else {
-            setPopup("Fail");
+            setPopup("Init Fail");
             setTimeout(() => {
                 closePopup();
-            },1000)
+            },FAIL_WAIT)
         }        
     }
 
@@ -551,13 +541,6 @@ const LoginPortal = () => {
             return;
         }
 
-        // package credentials and admin status and attempt driver query...
-        const body_data = {
-            USERNAME: credentials.USERNAME,
-            PASSWORD: null,
-            POWERUNIT: null
-        }
-        //const response = await fetch(API_URL + "api/Login/PullDriver", {
         const response = await fetch(API_URL + `v1/drivers/${credentials.USERNAME}`, {
             //body: JSON.stringify(body_data),
             method: "GET",
@@ -664,16 +647,10 @@ const LoginPortal = () => {
 
         if (company) {
             const COMPANIES = JSON.parse(sessionStorage.getItem("companies_map") || "{}");
-            //const COMPANIES = sessionStorage.getItem("companies_map") || "{}";
             setUser({...user, ActiveCompany: COMPANIES[company]});
 
             // select company to work under...
-            //const response = await fetch(API_URL + "api/Login/SetCompany", {
             const response = await fetch(API_URL + `v1/drivers/${credentials.USERNAME}/${Object.keys(COMPANIES).find(key => COMPANIES[key] === COMPANIES[company])}`, {
-                /*body: JSON.stringify({ 
-                    username: credentials.USERNAME,
-                    company: Object.keys(COMPANIES).find(key => COMPANIES[key] === COMPANIES[company]) 
-                }),*/
                 method: "POST",
                 headers: {
                     'Content-Type': 'application/json; charset=UTF-8'
@@ -716,17 +693,14 @@ const LoginPortal = () => {
         }
 
         // navigates to selected module using MODULEURL...
-        if (mod) {
-            //console.log(`mod: ${mod}`);
-            if (mod === "deliverymanager" || mod === "admin") {
-                window.location.href = `https://${mod}.tcsservices.com/`;
-            } else {
-                closePopup();
-            }
+        if (mod && mod === "deliverymanager" || mod === "admin") {
+            //alert(`https://${mod}.tcsservices.com/`);
+            window.location.href = `https://${mod}.tcsservices.com/`;
             return;
         }
 
         closePopup();
+        return;
     }
 
     /*/////////////////////////////////////////////////////////////////
@@ -875,6 +849,25 @@ const LoginPortal = () => {
                 </div>
                 </>
             );
+        } else if (type == "Init Success") {
+            const user = credentials.USERNAME;
+            return(
+                <>
+                    <div className="popupContent">
+                        <img id="success" src={Success} alt="success"/>
+                        <p>{user} was intialized successfully!</p>
+                    </div>
+                </>
+            )
+        } else if (type == "Init Fail") {
+            return(
+                <>
+                    <div className="popupContent">
+                        <img id="fail" src={Fail} alt="fail"/>
+                        <p>Oops! Something went wrong, please try again.</p>
+                    </div>
+                </>
+            )
         }
     }
 

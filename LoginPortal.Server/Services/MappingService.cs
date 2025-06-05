@@ -11,8 +11,7 @@ namespace LoginPortal.Server.Services
 
         public MappingService(IConfiguration config, ILogger<MappingService> logger)
         {
-            //_connString = config.GetConnectionString("TCSWEB");
-            _connString = config.GetConnectionString("DriverChecklistTestCon");
+            _connString = config.GetConnectionString("TCSWEB");
             _logger = logger;
         }
 

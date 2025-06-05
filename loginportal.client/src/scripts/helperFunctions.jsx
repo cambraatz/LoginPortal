@@ -249,9 +249,8 @@ export const MODULES = {
 export const API_URL = "https://login.tcsservices.com/";
 //export const API_URL = "https://localhost:7097/";
 
-
-
-
+export const FAIL_WAIT = 1000;
+export const SUCCESS_WAIT = 1500;
 
 //export const API_URL = "http://localhost:5173/";
 
