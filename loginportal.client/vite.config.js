@@ -7,7 +7,7 @@ import path from 'path';
 import child_process from 'child_process';
 import { env } from 'process';
 
-const baseFolder =
+/*const baseFolder =
     env.APPDATA !== undefined && env.APPDATA !== ''
         ? `${env.APPDATA}/ASP.NET/https`
         : `${env.HOME}/.aspnet/https`;
@@ -28,10 +28,13 @@ if (!fs.existsSync(certFilePath) || !fs.existsSync(keyFilePath)) {
     ], { stdio: 'inherit', }).status) {
         throw new Error("Could not create certificate.");
     }
-}
+}*/
 
 const target = env.ASPNETCORE_HTTPS_PORT ? `https://localhost:${env.ASPNETCORE_HTTPS_PORT}` :
     env.ASPNETCORE_URLS ? env.ASPNETCORE_URLS.split(';')[0] : 'https://localhost:7097';
+
+const __filename = fileURLToPath(import.meta.url);
+const currDir = path.dirname(__filename);
 
 // https://vitejs.dev/config/
 export default defineConfig({
@@ -50,8 +53,8 @@ export default defineConfig({
         },
         port: 5173,
         https: {
-            key: fs.readFileSync(keyFilePath),
-            cert: fs.readFileSync(certFilePath),
+            key: fs.readFileSync(path.join(currDir, 'localhost+2-key.pem')),
+            cert: fs.readFileSync(path.join(currDir, 'localhost+2.pem')),
         }
     }
 })

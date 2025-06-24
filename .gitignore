@@ -10,6 +10,9 @@ obj/
 loginportal.client/.env.production
 loginportal.client/.env.development
 
+loginportal.client/localhost+2.pem
+loginportal.client/localhost+2-key.pem
+
 ScaffoldingReadMe.txt
 
 *.user

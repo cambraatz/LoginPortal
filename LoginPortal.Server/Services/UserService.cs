@@ -17,7 +17,7 @@ namespace LoginPortal.Server.Services
         public UserService(IConfiguration config, ILogger<UserService> logger)
         {
             _config = config;
-            _connString = config.GetConnectionString("TCSWEB");
+            _connString = config.GetConnectionString("TCS");
             _logger = logger;
         }
 

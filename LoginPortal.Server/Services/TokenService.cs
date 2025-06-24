@@ -27,27 +27,49 @@ namespace LoginPortal.Server.Services
         {
             var now = DateTimeOffset.UtcNow;
 
-            Claim[] BaseClaims(string jti) => new[]
+            /*Claim[] BaseClaims(string jti) => new[]
             {
                 new Claim(ClaimTypes.Name, username),
                 new Claim(JwtRegisteredClaimNames.Jti,jti)
+            };*/
+
+            List<Claim> baseClaims = new List<Claim>
+            {
+                new Claim(ClaimTypes.Name, username),
+                new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
             };
-            Console.WriteLine(_config["Jwt:Key"]);
+
+            //Console.WriteLine(_config["Jwt:Key"]);
             var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_config["Jwt:Key"]!));
             var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
-            Console.WriteLine($"token debug: key: {key}, creds: {creds}");
+            //Console.WriteLine($"token debug: key: {key}, creds: {creds}");
+
+            var configuredAudiences = _config["Jwt:Audience"];
+            var audiences = configuredAudiences?.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                                                .Select(audiences => audiences.Trim())
+                                                .ToArray();
+            if (audiences == null || audiences.Length == 0)
+            {
+                _logger.LogError("Jwt:Audience configuration is missing or empty.");
+                audiences = Array.Empty<string>();
+            }
+
+            foreach (var aud in audiences!)
+            {
+                baseClaims.Add(new Claim(JwtRegisteredClaimNames.Aud, aud));
+            }
 
             var access = new JwtSecurityToken(
                 issuer: _config["Jwt:Issuer"],
-                audience: _config["Jwt:Audience"],
-                claims: BaseClaims(Guid.NewGuid().ToString()),
+                //audience: _config["Jwt:Audience"],
+                claims: baseClaims,
                 expires: now.AddMinutes(15).UtcDateTime,
                 signingCredentials: creds);
 
             var refresh = new JwtSecurityToken(
                 issuer: _config["Jwt:Issuer"],
-                audience: _config["Jwt:Audience"],
-                claims: BaseClaims(Guid.NewGuid().ToString()),
+                //audience: _config["Jwt:Audience"],
+                claims: baseClaims,
                 expires: now.AddDays(1).UtcDateTime,
                 signingCredentials: creds);
 
@@ -64,7 +86,8 @@ namespace LoginPortal.Server.Services
                 ValidateIssuer = true,
                 ValidateAudience = true,
                 ValidIssuer = _config["Jwt:Issuer"],
-                ValidAudience = _config["Jwt:Audience"],
+                ValidAudiences = _config["Jwt:Audience"]?.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(a => a.Trim()),
+                //ValidAudience = _config["Jwt:Audience"],
                 ValidateIssuerSigningKey = true,
                 IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_config["Jwt:Key"]!)),
                 ValidateLifetime = true,
@@ -107,8 +130,13 @@ namespace LoginPortal.Server.Services
             }
             catch (SecurityTokenException ex)
             {
-                //return new TokenValidation { IsValid = false, Message = ex.Message };
+                _logger.LogError(ex, $"Token validation failed for user {username}: {ex.Message}");
                 return new(false, ex.Message);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"An unexpected error occurred during token validation for user {username}: {ex.Message}");
+                return new(false, "An unexpected error occurred during token validation.");
             }
         }
 

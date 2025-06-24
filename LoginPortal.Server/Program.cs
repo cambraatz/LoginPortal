@@ -46,7 +46,7 @@ else
         options.AddPolicy(name: MyAllowSpecificOrigins,
             policy => {
                 policy.WithOrigins("https://localhost:5173", "http://localhost:5173",
-                                    "https://localhose:7097", "http://localhost:5171")
+                                    "https://localhost:7097", "http://localhost:5171")
                                     .AllowAnyHeader()
                                     .AllowAnyMethod()
                                     .AllowCredentials();
@@ -72,9 +72,26 @@ builder.Services.AddAuthentication(options =>
             ValidateLifetime = true,
             //ClockSkew = TimeSpan.FromMinutes(5),
             ValidateIssuerSigningKey = true,
+
             ValidIssuer = builder.Configuration["Jwt:Issuer"],
-            ValidAudience = builder.Configuration["Jwt:Audience"],
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]))
+            //ValidAudience = builder.Configuration["Jwt:Audience"],
+            ValidAudiences = builder.Configuration["Jwt:Audience"]?.Split(',', StringSplitOptions.RemoveEmptyEntries),
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"])),
+            ClockSkew = TimeSpan.Zero,
+        };
+
+        options.Events = new JwtBearerEvents
+        {
+            OnAuthenticationFailed = context =>
+            {
+                Console.WriteLine($"LoginPortal Authentication failed: {context.Exception.Message}");
+                return Task.CompletedTask;
+            },
+            OnTokenValidated = context =>
+            {
+                Console.WriteLine($"LoginPortal Token validated successfully for user: {context.Principal?.Identity?.Name}");
+                return Task.CompletedTask;
+            }
         };
     });
 
