@@ -91,5 +91,20 @@ namespace LoginPortal.Server.Services
                 );
             }
         }
+
+        public void DeleteCookies(HttpContext context)
+        {
+            var response = context.Response;
+            var request = context.Request;
+
+            foreach (var cookie in request.Cookies)
+            {
+                response.Cookies.Append(
+                    cookie.Key,
+                    cookie.Value,
+                    RemoveOptions()
+                );
+            }
+        }
     }
 }

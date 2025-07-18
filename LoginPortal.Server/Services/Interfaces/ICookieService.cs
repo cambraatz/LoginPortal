@@ -8,5 +8,6 @@ namespace LoginPortal.Server.Services.Interfaces
         CookieOptions AccessOptions();
         CookieOptions RefreshOptions();
         void ExtendCookies(HttpContext contex, int extensionMinutes);
+        void DeleteCookies(HttpContext context);
     }
 }

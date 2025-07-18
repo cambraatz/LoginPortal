@@ -58,9 +58,10 @@ namespace LoginPortal.Server.Controllers
         //private readonly string _connString;
         private readonly ILogger<SessionsController> _logger;
         private readonly ICookieService _cookieService;
+        private readonly ISessionService _sessionService;
 
         public SessionsController(IUserService userService, 
-            ITokenService tokenService, 
+            ITokenService tokenService, ISessionService sessionService,
             ILogger<SessionsController> logger, ICookieService cookieService)
         {
             _userService = userService;
@@ -68,6 +69,7 @@ namespace LoginPortal.Server.Controllers
             //_connString = config.GetConnectionString("TCSWEB");
             _logger = logger;
             _cookieService = cookieService;
+            _sessionService = sessionService;
         }
 
         private void UpdateSessionCookies(HttpResponse response, User user, string accessToken, string refreshToken)
@@ -194,6 +196,86 @@ namespace LoginPortal.Server.Controllers
             UpdateSessionCookies(Response, user, access, refresh);
 
             return Ok(new { user });
+        }
+
+        [HttpPost]
+        [Route("check-manifest-access")]
+        [Authorize]
+        public async Task<IActionResult> CheckManifestAccess([FromBody] ManifestAccessRequest request)
+        {
+            var username = User.FindFirst(ClaimTypes.Name)?.Value;
+            if (string.IsNullOrEmpty(username))
+            {
+                _logger.LogWarning("Attempt to access check-manifest-access without username claim.");
+                return Unauthorized("User identity not found.");
+            }
+
+            // The check `request.MfstDate == default(DateTime)` will now also catch cases
+            // where `MfstDateString` couldn't be parsed into a valid date.
+            if (string.IsNullOrEmpty(request.PowerUnit) || request.MfstDate == default(DateTime))
+            {
+                _logger.LogWarning("CheckManifestAccess: Power Unit or Manifest Date (or format issue) missing/invalid for user {Username}. Received PowerUnit: '{PowerUnit}', MfstDateString: '{MfstDateString}'",
+                                   username, request.PowerUnit, request.MfstDateString);
+                return BadRequest("Power Unit and Manifest Date are required and must be in 'MMDDYYYY' format.");
+            }
+
+            _logger.LogInformation("CheckManifestAccess: Checking for SSO conflicts for user {Username} on PowerUnit {PowerUnit} and ManifestDate {MfstDate}",
+                                   username, request.PowerUnit, request.MfstDate.ToShortDateString());
+            var conflictingSession = await _sessionService.GetConflictingSessionAsync(username, request.PowerUnit, request.MfstDate.Date);
+
+            if (conflictingSession != null)
+            {
+                _logger.LogWarning("SSO conflict detected! User {ConflictingUser} is already accessing PowerUnit {PowerUnit} on ManifestDate {MfstDate}. Invalidating their session.",
+                                   conflictingSession.Username, request.PowerUnit, request.MfstDate.ToShortDateString());
+
+                await _sessionService.InvalidateSessionAsync(conflictingSession.Username);
+
+                return Forbid("Another user is currently accessing this Power Unit and Manifest Date. Their session has been terminated to allow your access. Please try again or refresh their page.");
+            }
+
+            var currentAccessToken = Request.Cookies["access_token"];
+            var currentRefreshToken = Request.Cookies["refresh_token"];
+
+            if (string.IsNullOrEmpty(currentAccessToken) || string.IsNullOrEmpty(currentRefreshToken))
+            {
+                _logger.LogWarning("CheckManifestAccess: Missing access or refresh token for user {Username} during manifest session update.", username);
+                return Unauthorized("Session tokens missing. Please log in again.");
+            }
+
+            DateTime refreshExpiryTime = DateTime.UtcNow.AddDays(1);
+            try
+            {
+                var refreshJwtToken = new JwtSecurityTokenHandler().ReadJwtToken(currentRefreshToken);
+                if (refreshJwtToken.Payload.Expiration.HasValue)
+                {
+                    refreshExpiryTime = DateTimeOffset.FromUnixTimeSeconds(refreshJwtToken.Payload.Expiration.Value).UtcDateTime;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "CheckManifestAccess: Could not parse refresh token expiry for user {Username}. Using default expiry.", username);
+            }
+
+            var success = await _sessionService.AddOrUpdateSessionAsync(
+                username,
+                currentAccessToken,
+                currentRefreshToken,
+                refreshExpiryTime,
+                request.PowerUnit,
+                request.MfstDate.Date
+            );
+
+            if (!success)
+            {
+                _logger.LogError("CheckManifestAccess: Failed to update session details for user {Username} with PowerUnit {PowerUnit} and ManifestDate {MfstDate}.",
+                                 username, request.PowerUnit, request.MfstDate.ToShortDateString());
+                return StatusCode(500, "Failed to update session with manifest details.");
+            }
+
+            _logger.LogInformation("CheckManifestAccess: Manifest access granted and session updated for user {Username} to PowerUnit {PowerUnit} and ManifestDate {MfstDate}.",
+                                   username, request.PowerUnit, request.MfstDate.ToShortDateString());
+
+            return Ok("Manifest access granted and session updated.");
         }
     }
 }

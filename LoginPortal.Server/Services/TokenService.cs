@@ -12,11 +12,13 @@ namespace LoginPortal.Server.Services
         private readonly JwtSecurityTokenHandler _handler = new();
         private readonly ILogger<TokenService> _logger;
         private readonly ICookieService _cookieService;
-        public TokenService(IConfiguration config, ILogger<TokenService> logger, ICookieService cookieService)
+        private readonly ISessionService _sessionService;
+        public TokenService(IConfiguration config, ILogger<TokenService> logger, ICookieService cookieService, ISessionService sessionService)
         {
             _config = config;
             _logger = logger;
             _cookieService = cookieService;
+            _sessionService = sessionService;
         }
 
         /* Token Generation
@@ -66,14 +68,28 @@ namespace LoginPortal.Server.Services
                 expires: now.AddMinutes(15).UtcDateTime,
                 signingCredentials: creds);
 
+            var refreshExpires = now.AddDays(1).UtcDateTime;
             var refresh = new JwtSecurityToken(
                 issuer: _config["Jwt:Issuer"],
                 //audience: _config["Jwt:Audience"],
                 claims: baseClaims,
-                expires: now.AddDays(1).UtcDateTime,
+                expires: refreshExpires,
                 signingCredentials: creds);
 
-            return (_handler.WriteToken(access), _handler.WriteToken(refresh));
+            var generatedAccess = _handler.WriteToken(access);
+            var generatedRefresh = _handler.WriteToken(refresh);
+
+            // store session in database...
+            _sessionService.AddOrUpdateSessionAsync(
+                username,
+                generatedAccess,
+                generatedRefresh,
+                refreshExpires,
+                null,
+                null
+            ).Wait();
+
+            return (generatedAccess, generatedRefresh);
         }
 
         /* Token Validation
@@ -97,6 +113,20 @@ namespace LoginPortal.Server.Services
             try
             {
                 var principal = _handler.ValidateToken(accessToken, tokenParams, out var validated);
+
+                // get refresh token's expirty for session update...
+                var refreshJwt = _handler.ReadJwtToken(refreshToken);
+                var refreshExpSession = DateTimeOffset.FromUnixTimeSeconds(refreshJwt.Payload.Expiration!.Value).UtcDateTime;
+
+                // store session in database...
+                _sessionService.AddOrUpdateSessionAsync(
+                    username,
+                    accessToken,
+                    refreshToken,
+                    refreshExpSession,
+                    null,
+                    null
+                ).Wait();
 
                 // token is still valid + not expiring soon...
                 var exp = DateTimeOffset.FromUnixTimeSeconds(((JwtSecurityToken)validated).Payload.Expiration!.Value);
@@ -165,18 +195,16 @@ namespace LoginPortal.Server.Services
             var result = ValidateTokens(accessToken, refreshToken, username);
             if (!result.IsValid)
             {
+                _cookieService.DeleteCookies(context);
                 return (false, "Invalid access token, authorization failed.");
             }
 
-            // valid tokens are returned, regardless of refresh status...
-            accessToken = result.AccessToken;
-            refreshToken = result.RefreshToken;
-
             // if non-null, replace tokens in cookies with fresh set...
-            if (accessToken != null && refreshToken != null)
+            if (result.AccessToken != null && result.RefreshToken != null &&
+                (result.AccessToken != accessToken || result.RefreshToken != refreshToken))
             {
-                response.Cookies.Append("access_token", accessToken, _cookieService.AccessOptions());
-                response.Cookies.Append("refresh_token", refreshToken, _cookieService.RefreshOptions());
+                response.Cookies.Append("access_token", result.AccessToken, _cookieService.AccessOptions());
+                response.Cookies.Append("refresh_token", result.RefreshToken, _cookieService.RefreshOptions());
             }
 
             return (true, "Token has been validated, authorization granted.");
