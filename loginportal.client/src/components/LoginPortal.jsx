@@ -20,6 +20,8 @@ import {
     FAIL_WAIT
 } from '../scripts/helperFunctions';
 
+import { Logout } from '../utils/sessions';
+
 const API_URL = import.meta.env.VITE_API_URL;
 
 /*/////////////////////////////////////////////////////////////////////
@@ -143,16 +145,8 @@ const LoginPortal = () => {
         localStorage.clear();
         sessionStorage.clear();
 
-        const response = await fetch(API_URL + "v1/sessions/logout", {
-            method: "POST",
-            headers: {
-                'Content-Type': 'application/json; charset=UTF-8'
-            },
-        })
-        if (!response.ok) {
-            //console.log("Cookies have been cleared successfully.");
-            console.alert("Cookie removal failed, Logout failure.");
-        } else {
+        const response = await Logout();
+        if (response.ok) {
             fetchMappings();
         }
     }
@@ -210,7 +204,7 @@ const LoginPortal = () => {
         });
 
         setUser(default_user);
-
+        //Logout();
         cleanSlate();
     };
 
@@ -345,7 +339,8 @@ const LoginPortal = () => {
             method: "POST",
             headers: {
                 'Content-Type': 'application/json; charset=UTF-8'
-            }
+            },
+            credentials: 'include'
         })
 
         if (response.ok) {

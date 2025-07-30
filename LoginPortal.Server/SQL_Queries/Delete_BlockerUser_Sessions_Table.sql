@@ -1,2 +1,2 @@
 DELETE FROM TCSWEB.dbo.SESSIONS
-WHERE USERNAME = 'testBlocker';
+WHERE USERNAME = 'cbraatz';

@@ -2,6 +2,6 @@ INSERT INTO TCSWEB.dbo.SESSIONS (
 	USERNAME, POWERUNIT, MFSTDATE, ACCESSTOKEN, REFRESHTOKEN,
 	EXPIRYTIME, LOGINTIME, LASTACTIVITY
 ) VALUES (
-	'testBlocker', '044', '2024-02-16', 'access-token-xyz', 'refresh-token-abc',
-	'2025-07-21 12:00:00', '2025-07-14 08:15:00', '2025-07-14 08:20:00'
+	'cbraatz', '047', '02162024', 'access-token-xyz', 'refresh-token-abc',
+	'2025-07-27 12:00:00', '2025-07-24 11:30:00', '2025-07-24 11:30:00'
 );

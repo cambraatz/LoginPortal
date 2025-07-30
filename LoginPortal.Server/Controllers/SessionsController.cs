@@ -117,25 +117,51 @@ namespace LoginPortal.Server.Controllers
                 return BadRequest(new { message = "No results found for company and/or module permissions for the current user, contact system administrator." });
             }
 
+            // Add the session record in the database
+            SessionModel? initialSession = await _sessionService.AddOrUpdateSessionAsync(
+                0, // pass zero to add new session...
+                user.Username!,
+                "access_placeholder", // placeholders to be updated...
+                "refresh_placeholder",
+                DateTime.UtcNow.AddDays(1),
+                null,
+                null
+            );
+
+            if (initialSession == null || initialSession.Id == 0)
+            {
+                _logger.LogError("Login: Failed to create initial session record for user {Username}.", user.Username);
+                return StatusCode(500, "Failed to initialize session in the database.");
+            }
+
             string access, refresh;
             try 
             {
-                (access, refresh) = _tokenService.GenerateToken(user.Username!);
+                (access, refresh) = await _tokenService.GenerateToken(user.Username!, initialSession.Id);
             } catch (Exception ex)
             {
                 _logger.LogError(ex, "Error generating tokens for user {Username}", user.Username);
-                Console.WriteLine(ex);
+                await _sessionService.DeleteSessionByIdAsync(initialSession.Id);
                 return StatusCode(500, "Internal error generating authentication tokens.");
             }
 
-
-            /*Response.Cookies.Append("access_token", access, CookieService.AccessOptions());
-            Response.Cookies.Append("refresh_token", refresh, CookieService.RefreshOptions());
-            Response.Cookies.Append("username", user.Username!, CookieService.AccessOptions());
-            Response.Cookies.Append("company", user.ActiveCompany!, CookieService.AccessOptions());*/
+            DateTime refreshExpiryTime = DateTime.UtcNow.AddDays(1);
+            try
+            {
+                var refreshJwtToken = new JwtSecurityTokenHandler().ReadJwtToken(refresh);
+                if (refreshJwtToken.Payload.Expiration.HasValue)
+                {
+                    refreshExpiryTime = DateTimeOffset.FromUnixTimeSeconds(refreshJwtToken.Payload.Expiration.Value).UtcDateTime;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "DevLogin: Could not parse refresh token expiry for user {Username}. Using default expiry.", creds.USERNAME);
+            }
 
             UpdateSessionCookies(Response, user, access, refresh);
 
+            _logger.LogInformation("User {Username} logged in successfully. Session ID: {SessionId}", user.Username, initialSession.Id);
             return Ok(new { user });
         }
 
@@ -149,8 +175,30 @@ namespace LoginPortal.Server.Controllers
         *//////////////////////////////////////////////////////////////////////////////
         [HttpPost]
         [Route("logout")]
-        public IActionResult Logout()
+        public async Task<IActionResult> Logout()
         {
+            string? username = Request.Cookies["username"];
+            string? accessToken = Request.Cookies["access_token"];
+            string? refreshToken = Request.Cookies["refresh_token"];
+            _logger.LogWarning($"Attempting to logout with collected cookies; username: {username}, access: {accessToken} and refresh: {refreshToken}");
+            if (!string.IsNullOrEmpty(username) && !string.IsNullOrEmpty(accessToken) && !string.IsNullOrEmpty(refreshToken))
+            {
+                SessionModel? session = await _sessionService.GetSessionAsync(username!, accessToken!, refreshToken!);
+                if (session != null)
+                {
+                    _logger.LogWarning($"Invalidating sesssion by tokens {accessToken} and {refreshToken}");
+                    bool sessionCleared = await _sessionService.DeleteSessionByIdAsync(session.Id);
+                }
+            }
+
+            /*SessionModel? session = await _sessionService.GetSessionByIdAsync(sessionId);
+            if (session != null)
+            {
+                _logger.LogWarning($"Invalidating sesssion by ID {sessionId}");
+                bool sessionCleared = await _sessionService.DeleteSessionByIdAsync(sessionId);
+            }*/
+
+
             foreach (var cookie in Request.Cookies)
             {
                 Response.Cookies.Append(cookie.Key, "", _cookieService.RemoveOptions());
@@ -178,104 +226,64 @@ namespace LoginPortal.Server.Controllers
                 return Unauthorized(new { message = "Username was not found in cookies." });
             }
 
+            string? accessToken = Request.Cookies["access_token"];
+            string? refreshToken = Request.Cookies["refresh_token"];
+            if (string.IsNullOrEmpty(accessToken) || string.IsNullOrEmpty(refreshToken))
+            {
+                _logger.LogWarning("Credentials: Access or refresh token missing from cookies for user {Username}.", username);
+                return Unauthorized(new { message = "Authentication tokens missing. Please log in again." });
+            }
+            // validate and refresh tokens as necessary...
+            _logger.LogInformation("Credentials: Attempting to validate and refresh tokens for user {Username}.", username);
+            var tokenValidationResult = await _tokenService.ValidateTokens(accessToken, refreshToken, username, tryRefresh: true);
+            if (!tokenValidationResult.IsValid)
+            {
+                _logger.LogWarning("Credentials: Token validation/refresh failed for user {Username}. Reason: {Message}", username, tokenValidationResult.Message);
+                _cookieService.DeleteCookies(HttpContext); // Clear all cookies on failure
+                return Unauthorized(new { message = tokenValidationResult.Message });
+            }
+
+            // tokens are valid and updated in the DB session if refreshed...
+
             // ask the service for the user...
             var user = await _userService.GetByUsernameAsync(username);
             if (user == null)
             {
+                _logger.LogError("Credentials: User details not found for username {Username} after successful token validation.", username);
+                _cookieService.DeleteCookies(HttpContext); // Clear cookies if user profile is missing
                 return Unauthorized(new { message = "User does not exist in company records." });
             }
 
-            if (user.Companies!.Count == 0 || user.Modules!.Count == 0)
+            if (user.Companies == null || user.Companies.Count == 0 || user.Modules == null || user.Modules.Count == 0)
             {
+                _logger.LogWarning("Credentials: User {Username} has no assigned company/module permissions.", username);
+                _cookieService.DeleteCookies(HttpContext); // Clear cookies if permissions are missing
                 return Forbid("Valid user has no assigned company/module permissions, contact system administrator.");
             }
 
-            string access, refresh;
-            (access, refresh) = _tokenService.GenerateToken(user.Username!);
+            // update cookies with new tokens...
+            if (tokenValidationResult.AccessToken != null && tokenValidationResult.RefreshToken != null &&
+                (tokenValidationResult.AccessToken != accessToken || tokenValidationResult.RefreshToken != refreshToken))
+            {
+                _logger.LogInformation("Credentials: Updating client cookies with new access and refresh tokens for user {Username}.", username);
+                Response.Cookies.Append("access_token", tokenValidationResult.AccessToken, _cookieService.AccessOptions());
+                Response.Cookies.Append("refresh_token", tokenValidationResult.RefreshToken, _cookieService.RefreshOptions());
+            }
+            else
+            {
+                _logger.LogWarning("Credentials: Tokens were not updated for user {Username} after validation.", username);
+            }
+            //string access, refresh;
+            //(access, refresh) = _tokenService.GenerateToken(user.Username!);
 
-            UpdateSessionCookies(Response, user, access, refresh);
+            //UpdateSessionCookies(Response, user, access, refresh);
+            Response.Cookies.Append("username", user.Username!, _cookieService.AccessOptions());
+            Response.Cookies.Append("company", user.ActiveCompany!, _cookieService.AccessOptions());
+            Response.Cookies.Append("company_mapping", Newtonsoft.Json.JsonConvert.SerializeObject(user.Companies), _cookieService.AccessOptions());
+            Response.Cookies.Append("module_mapping", Newtonsoft.Json.JsonConvert.SerializeObject(user.Modules), _cookieService.AccessOptions());
 
+            _logger.LogInformation("Credentials: User {Username} successfully re-authenticated and session refreshed.", username);
             return Ok(new { user });
-        }
-
-        [HttpPost]
-        [Route("check-manifest-access")]
-        [Authorize]
-        public async Task<IActionResult> CheckManifestAccess([FromBody] ManifestAccessRequest request)
-        {
-            var username = User.FindFirst(ClaimTypes.Name)?.Value;
-            if (string.IsNullOrEmpty(username))
-            {
-                _logger.LogWarning("Attempt to access check-manifest-access without username claim.");
-                return Unauthorized("User identity not found.");
-            }
-
-            // The check `request.MfstDate == default(DateTime)` will now also catch cases
-            // where `MfstDateString` couldn't be parsed into a valid date.
-            if (string.IsNullOrEmpty(request.PowerUnit) || request.MfstDate == default(DateTime))
-            {
-                _logger.LogWarning("CheckManifestAccess: Power Unit or Manifest Date (or format issue) missing/invalid for user {Username}. Received PowerUnit: '{PowerUnit}', MfstDateString: '{MfstDateString}'",
-                                   username, request.PowerUnit, request.MfstDateString);
-                return BadRequest("Power Unit and Manifest Date are required and must be in 'MMDDYYYY' format.");
-            }
-
-            _logger.LogInformation("CheckManifestAccess: Checking for SSO conflicts for user {Username} on PowerUnit {PowerUnit} and ManifestDate {MfstDate}",
-                                   username, request.PowerUnit, request.MfstDate.ToShortDateString());
-            var conflictingSession = await _sessionService.GetConflictingSessionAsync(username, request.PowerUnit, request.MfstDate.Date);
-
-            if (conflictingSession != null)
-            {
-                _logger.LogWarning("SSO conflict detected! User {ConflictingUser} is already accessing PowerUnit {PowerUnit} on ManifestDate {MfstDate}. Invalidating their session.",
-                                   conflictingSession.Username, request.PowerUnit, request.MfstDate.ToShortDateString());
-
-                await _sessionService.InvalidateSessionAsync(conflictingSession.Username);
-
-                return Forbid("Another user is currently accessing this Power Unit and Manifest Date. Their session has been terminated to allow your access. Please try again or refresh their page.");
-            }
-
-            var currentAccessToken = Request.Cookies["access_token"];
-            var currentRefreshToken = Request.Cookies["refresh_token"];
-
-            if (string.IsNullOrEmpty(currentAccessToken) || string.IsNullOrEmpty(currentRefreshToken))
-            {
-                _logger.LogWarning("CheckManifestAccess: Missing access or refresh token for user {Username} during manifest session update.", username);
-                return Unauthorized("Session tokens missing. Please log in again.");
-            }
-
-            DateTime refreshExpiryTime = DateTime.UtcNow.AddDays(1);
-            try
-            {
-                var refreshJwtToken = new JwtSecurityTokenHandler().ReadJwtToken(currentRefreshToken);
-                if (refreshJwtToken.Payload.Expiration.HasValue)
-                {
-                    refreshExpiryTime = DateTimeOffset.FromUnixTimeSeconds(refreshJwtToken.Payload.Expiration.Value).UtcDateTime;
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "CheckManifestAccess: Could not parse refresh token expiry for user {Username}. Using default expiry.", username);
-            }
-
-            var success = await _sessionService.AddOrUpdateSessionAsync(
-                username,
-                currentAccessToken,
-                currentRefreshToken,
-                refreshExpiryTime,
-                request.PowerUnit,
-                request.MfstDate.Date
-            );
-
-            if (!success)
-            {
-                _logger.LogError("CheckManifestAccess: Failed to update session details for user {Username} with PowerUnit {PowerUnit} and ManifestDate {MfstDate}.",
-                                 username, request.PowerUnit, request.MfstDate.ToShortDateString());
-                return StatusCode(500, "Failed to update session with manifest details.");
-            }
-
-            _logger.LogInformation("CheckManifestAccess: Manifest access granted and session updated for user {Username} to PowerUnit {PowerUnit} and ManifestDate {MfstDate}.",
-                                   username, request.PowerUnit, request.MfstDate.ToShortDateString());
-
-            return Ok("Manifest access granted and session updated.");
         }
     }
 }
